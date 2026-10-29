@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>지점 상세 전망</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/point.css">
+</head>
+<body class="pointpage">
+  <header class="phead">
+    <div>
+      <h1 id="ptTitle">지점 상세</h1>
+      <div class="psub" id="ptSub"></div>
+    </div>
+    <div class="pctl">
+      <div class="seg" id="pProductSeg"></div>
+    </div>
+  </header>
+  <nav class="vtabs" id="varTabs" role="tablist"></nav>
+
+  <main class="pbody">
+    <section class="card">
+      <div class="chead">
+        <h2>기간별 3분위 확률</h2>
+        <span class="hint" id="tercHint"></span>
+      </div>
+      <div id="tercileBars"></div>
+    </section>
+
+    <section class="card">
+      <div class="chead">
+        <h2 id="tsTitle">일별 앙상블 시계열</h2>
+        <div class="seg mini" id="tsMode"></div>
+      </div>
+      <div class="chart" id="tsChart"></div>
+      <div class="clegend" id="tsLegend"></div>
+    </section>
+
+    <section class="card">
+      <div class="chead">
+        <h2>기간별 앙상블 분포와 평년 범주</h2>
+        <span class="hint">점: 51개 멤버 · 상자: 25–75% · 배경: 평년 하위/중간/상위 1/3</span>
+      </div>
+      <div class="chart" id="distChart"></div>
+    </section>
+
+    <section class="card">
+      <div class="chead">
+        <h2>기간별 통계표</h2>
+        <button class="btn" id="csvBtn" type="button">CSV 내려받기</button>
+      </div>
+      <div class="tablewrap"><table class="stats" id="statTable"></table></div>
+      <div id="ecTableBox" hidden>
+        <h3 class="subh">ECMWF EC46 직접 산출 주별 편차 확률 <span class="hint">(100 멤버, 모델 기후 기준)</span></h3>
+        <div class="tablewrap"><table class="stats" id="ecTable"></table></div>
+      </div>
+      <p class="hint" id="tableNote"></p>
+    </section>
+  </main>
+
+  <script src="js/common.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/point.js"></script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>한반도 객관기후예측</title>
+  <meta name="description" content="ECMWF EC46·SEAS5 51개 앙상블(Open-Meteo) 기반 한반도 1개월·3개월 객관 기후전망: 3분위 확률, 앙상블 평균, 평년편차, 임계값 초과확률">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1>한반도 객관기후예측</h1>
+        <p class="sub">1개월 · 3개월 확률 기후전망</p>
+      </div>
+    </div>
+    <div class="issue" id="issue">자료를 불러오는 중…</div>
+    <nav class="links">
+      <a href="index.html" aria-current="page">전망 지도</a>
+      <a href="about.html">서비스 설계·방법</a>
+      <button id="themeBtn" class="iconbtn" title="밝게/어둡게" aria-label="화면 테마 전환">◐</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <aside class="panel" aria-label="표출 설정">
+      <section>
+        <h2>전망 종류</h2>
+        <div class="seg" id="productSeg" role="radiogroup"></div>
+        <p class="hint" id="modelHint"></p>
+      </section>
+      <section>
+        <h2>요소</h2>
+        <div class="seg seg4" id="varSeg" role="radiogroup"></div>
+      </section>
+      <section>
+        <h2>예측 기간</h2>
+        <div class="chips" id="periodChips" role="radiogroup"></div>
+      </section>
+      <section>
+        <h2>표출 항목</h2>
+        <div class="list" id="displayList" role="radiogroup"></div>
+        <div id="thresholdBox" class="subopt" hidden>
+          <label for="thresholdSel">임계값</label>
+          <select id="thresholdSel"></select>
+        </div>
+        <div id="extremeBox" class="subopt" hidden>
+          <div class="seg" id="extremeSeg"></div>
+        </div>
+      </section>
+      <section class="explain">
+        <h2>해설</h2>
+        <p id="explain"></p>
+        <p class="hint">지도의 육상 지점을 클릭하면 해당 격자의 시계열·확률표가 별도 창으로 열립니다.</p>
+      </section>
+      <section>
+        <h2>지점 바로가기</h2>
+        <select id="citySel"><option value="">도시 선택…</option></select>
+        <label class="check"><input type="checkbox" id="gridChk"> 분석 격자점(0.5°) 표시</label>
+        <label class="check"><input type="checkbox" id="tileChk"> 배경지도 타일(OSM, 온라인)</label>
+      </section>
+    </aside>
+
+    <section class="mapcol">
+      <div class="maphead">
+        <div>
+          <div class="maptitle" id="mapTitle"></div>
+          <div class="mapsub" id="mapSub"></div>
+        </div>
+        <div class="legend" id="legend" aria-label="범례"></div>
+      </div>
+      <div class="mapwrap">
+        <div id="map" role="application" aria-label="한반도 전망 지도"></div>
+        <div class="hoverbox" id="hoverBox" hidden></div>
+        <div class="demo-ribbon" id="demoRibbon" hidden>DEMO · 합성 자료</div>
+      </div>
+      <div class="strip">
+        <div class="striphead">기간별 비교 <span class="hint">— 클릭하면 해당 기간으로 전환</span></div>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="floatwin" id="pointWin" hidden role="dialog" aria-labelledby="pointWinTitle">
+    <div class="floatbar" id="pointWinBar">
+      <span id="pointWinTitle">지점 상세</span>
+      <span class="spacer"></span>
+      <button class="iconbtn" id="popoutBtn" title="새 브라우저 창으로 열기" aria-label="새 창으로 열기">⧉</button>
+      <button class="iconbtn" id="closeBtn" title="닫기" aria-label="닫기">✕</button>
+    </div>
+    <iframe id="pointFrame" title="지점 상세 정보"></iframe>
+  </div>
+
+  <footer class="foot">
+    자료: ECMWF EC46 · SEAS5 (51 앙상블 멤버) via <a href="https://open-meteo.com/en/docs/seasonal-forecast-api" target="_blank" rel="noopener">Open-Meteo Seasonal API</a>,
+    평년: ERA5 1991–2020 (<a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noopener">Open-Meteo Archive</a>).
+    Contains modified Copernicus/ECMWF data. 편의 보정 전 모델 원자료를 사용한 실험적 서비스입니다.
+  </footer>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/field.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
