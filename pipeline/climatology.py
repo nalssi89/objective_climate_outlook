@@ -63,7 +63,10 @@ class Climatology:
             if i0 < 0 or i1 >= self.ndays:
                 continue
             block = arr[:, i0:i1 + 1]
-            out.append(np.nanmean(block, axis=1) if agg == "mean" else np.nansum(block, axis=1))
+            with np.errstate(invalid="ignore"):
+                v = np.nanmean(block, axis=1) if agg == "mean" else np.nansum(block, axis=1)
+            v[np.isfinite(block).mean(axis=1) < 0.8] = np.nan  # 결측이 많은 해는 제외(누적을 0으로 채우지 않음)
+            out.append(v)
         return np.array(out).T if out else None
 
     def stats(self, var, start, end, agg, mode):
