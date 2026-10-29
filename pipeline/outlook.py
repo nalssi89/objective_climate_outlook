@@ -132,7 +132,7 @@ def monthly_clim_rates(resp, dates, D, V):
     for t in b.get("time", []):
         mk = t[:7]
         idx = [i for i, d in enumerate(dates) if d.isoformat()[:7] == mk and i < D.shape[2]]
-        if len(idx) < 3:
+        if len(idx) < 10:
             continue
         with np.errstate(invalid="ignore"):
             daily_ens = np.nanmean(D[:, :, idx], axis=(1, 2))  # 일평균(강수는 일합계의 평균)
@@ -193,10 +193,14 @@ def compute_product(key, resp, points, clim, issue, clim_rates=None):
             elif key == "1m" and V["mode"] == "mul":
                 # EC46 주별 강수·풍속 평균은 일별 멤버 집계와 정의가 달라 비율 역산이 불안정 →
                 # 같은 IFS 계열인 SEAS5 의 월별 모델 기후값(일 단위)을 주 기간에 합산/평균
-                days = [dates[i].isoformat()[:7] for i in range(p["i0"], p["i1"] + 1)]
-                if days and all(m in rates for m in days):
-                    stack = np.array([rates[m] for m in days])
-                    cm = stack.sum(axis=0) if V["agg"] == "sum" else stack.mean(axis=0)
+                # 월 중앙일 사이를 선형 보간해 월 안의 계절 변화를 반영(범위 밖은 가장 가까운 달 값)
+                if rates:
+                    mks = sorted(rates)
+                    mid = np.array([dt.date.fromisoformat(m + "-15").toordinal() for m in mks], dtype=float)
+                    R = np.array([rates[m] for m in mks])  # (월, 지점)
+                    days = np.array([dates[i].toordinal() for i in range(p["i0"], p["i1"] + 1)], dtype=float)
+                    daily = np.array([[np.interp(d, mid, R[:, j]) for j in range(n)] for d in days])
+                    cm = daily.sum(axis=0) if V["agg"] == "sum" else daily.mean(axis=0)
                 else:
                     cm = np.full(n, np.nan)
                 model_ok = np.isfinite(cm)
