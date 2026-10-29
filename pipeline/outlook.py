@@ -120,14 +120,42 @@ def pct(x):
 
 
 # ---------------------------------------------------------------- 핵심 산출
-def compute_product(key, resp, points, clim, issue):
+def monthly_clim_rates(resp, dates, D, V):
+    """SEAS5 월별 평균·편차로 역산한 월별 모델 기후값의 '일 단위' 값 {YYYY-MM: (지점,)}.
+
+    API 월값과 일별 멤버 집계의 정의(단위)가 달라도 성립하도록 비율로 환산한다.
+    """
+    rates = {}
+    b = resp[0].get("monthly") or {}
+    for t in b.get("time", []):
+        mk = t[:7]
+        idx = [i for i, d in enumerate(dates) if d.isoformat()[:7] == mk and i < D.shape[2]]
+        if len(idx) < 3:
+            continue
+        with np.errstate(invalid="ignore"):
+            daily_ens = np.nanmean(D[:, :, idx], axis=(1, 2))  # 일평균(강수는 일합계의 평균)
+        p = {"start": dt.date.fromisoformat(mk + "-01")}
+        A, a = api_period_values(resp, "monthly", V["monthly"], p)
+        if V["mode"] == "add":
+            r = daily_ens - a
+        else:
+            with np.errstate(invalid="ignore", divide="ignore"):
+                f = (A - a) / A
+            f[~np.isfinite(f) | (f <= 0.05) | (f > 20)] = np.nan
+            r = daily_ens * f
+        rates[mk] = r
+    return rates
+
+
+def compute_product(key, resp, points, clim, issue, clim_rates=None):
+    """clim_rates: 3개월(SEAS5) 산출에서 얻은 월별 모델 기후 일값 — 1개월 전망의 승법 요소 평년값에 사용."""
     P = PRODUCTS[key]
     dates = [dt.date.fromisoformat(t) for t in resp[0]["daily"]["time"]]
     periods = define_periods(key, dates, resp[0].get("weekly"), issue)
     if not periods:
         raise RuntimeError(f"{key}: 예측기간을 구성할 수 없음 (일수 {len(dates)})")
     block = "weekly" if key == "1m" else "monthly"
-    fields, tables, members_out, daily_out = {}, {}, {}, {}
+    fields, tables, members_out, daily_out, rates_out = {}, {}, {}, {}, {}
     pts = np.asarray(points)
     n = len(points)
 
@@ -140,6 +168,9 @@ def compute_product(key, resp, points, clim, issue):
         prefix = V["weekly"] if key == "1m" else V["monthly"]
         fields[vk], tables[vk], members_out[vk] = {}, {}, {}
         base_clim = {}
+        if key == "3m" and V["monthly"]:
+            rates_out[vk] = monthly_clim_rates(resp, dates, D, V)
+        rates = (clim_rates or {}).get(vk, {})
 
         for p in periods:
             X = aggregate(D, p["i0"], p["i1"], V["agg"])  # (n, nmem)
@@ -157,6 +188,16 @@ def compute_product(key, resp, points, clim, issue):
                 stack = np.array([c[0] for c in parts])
                 cm = stack.sum(axis=0) if V["agg"] == "sum" else (stack * w[:, None]).sum(axis=0) / w.sum()
                 model_ok = np.all([c[1] == "model" for c in parts], axis=0)
+            elif key == "1m" and V["mode"] == "mul":
+                # EC46 주별 강수·풍속 평균은 일별 멤버 집계와 정의가 달라 비율 역산이 불안정 →
+                # 같은 IFS 계열인 SEAS5 의 월별 모델 기후값(일 단위)을 주 기간에 합산/평균
+                days = [dates[i].isoformat()[:7] for i in range(p["i0"], p["i1"] + 1)]
+                if days and all(m in rates for m in days):
+                    stack = np.array([rates[m] for m in days])
+                    cm = stack.sum(axis=0) if V["agg"] == "sum" else stack.mean(axis=0)
+                else:
+                    cm = np.full(n, np.nan)
+                model_ok = np.isfinite(cm)
             else:
                 A, a = api_period_values(resp, block, prefix, p)
                 if V["mode"] == "add":
@@ -266,7 +307,7 @@ def compute_product(key, resp, points, clim, issue):
             ec_probs.append(row)
 
     return {
-        "key": key, "periods": periods, "dates": dates[: periods[-1]["i1"] + 1], "fields": fields,
+        "key": key, "periods": periods, "dates": dates[: periods[-1]["i1"] + 1], "fields": fields, "rates": rates_out,
         "tables": tables, "members": members_out, "daily": daily_out, "ec_probs": ec_probs,
         "nmem": {vk: int(np.max(np.isfinite(m[periods[0]["id"]]).sum(axis=1))) for vk, m in members_out.items()},
     }
@@ -292,7 +333,7 @@ def write_outputs(products, points, demo, clim):
                       for k, V in VARIABLES.items()},
         "products": {},
     }
-    for key, R in products.items():
+    for key, R in sorted(products.items()):
         P = PRODUCTS[key]
         manifest["products"][key] = {
             "name": P["name"], "model": P["model_name"], "periods": period_meta(R["periods"]),
@@ -361,7 +402,9 @@ def main():
 
     daily_vars = [V["daily"] for V in VARIABLES.values()]
     products = {}
-    for key in args.products.split(","):
+    keys = args.products.split(",")
+    keys.sort(key=lambda k: k != "3m")  # 1개월 평년값에 SEAS5 월별 모델 기후를 쓰므로 3개월 먼저
+    for key in keys:
         P = PRODUCTS[key]
         if key == "1m":
             weekly = [f"{V['weekly']}_{s}" for V in VARIABLES.values() if V["weekly"] for s in ("mean", "anomaly")] + EC46_WEEKLY_PROBS
@@ -374,7 +417,8 @@ def main():
             resp = synthetic.seasonal(points, key, issue, P["forecast_days"], daily_vars, weekly, monthly)
         else:
             resp = om.fetch_seasonal(points, P["model"], daily_vars, weekly, monthly, P["forecast_days"])
-        products[key] = compute_product(key, resp, points, clim, issue)
+        rates = products["3m"]["rates"] if "3m" in products else None
+        products[key] = compute_product(key, resp, points, clim, issue, rates)
     write_outputs(products, points, args.demo, clim)
 
 
