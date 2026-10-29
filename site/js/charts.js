@@ -73,8 +73,7 @@
     const every = Math.ceil(n / Math.max(4, Math.floor((W - 60) / 60)));
     opt.dates.forEach((d, i) => {
       const dt = new Date(d + 'T00:00:00');
-      if (dt.getDate() === 1 || (n <= 50 && i % every === 0 && n > 0)) {
-        if (n > 50 && dt.getDate() !== 1) return;
+      if (n > 50 ? dt.getDate() === 1 : i % every === 0) {
         const t = el('text', { x: x(i), y: H - m.b + 16, class: 'tick', 'text-anchor': 'middle' }, g);
         t.textContent = `${dt.getMonth() + 1}/${dt.getDate()}`;
         el('line', { x1: x(i), x2: x(i), y1: H - m.b, y2: H - m.b + 4, class: 'axis' }, g);
