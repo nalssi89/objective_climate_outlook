@@ -38,5 +38,18 @@ def main():
             print(f"  | ... ({len(lines)} lines)")
 
 
+def parsed_sample():
+    import kma
+
+    print("\n===== kma.sfcdd_day 해석 결과 (2015-07-15)")
+    d = kma.sfcdd_day("20150715")
+    print(f"  지점 수 {len(d)}")
+    for stn in (108, 105, 184):
+        rec = d.get(stn)
+        if rec:
+            print(f"  {stn}:", {c: rec.get(c) for c in ("TM", "STN", *kma.ELEMENTS.values())})
+
+
 if __name__ == "__main__":
     main()
+    parsed_sample()
