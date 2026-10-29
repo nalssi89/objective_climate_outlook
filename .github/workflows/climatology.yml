@@ -1,6 +1,7 @@
 name: ERA5 평년값 구축
 
 # 최초 1회(이어받기). Open-Meteo 일일 호출 한도에 걸리면 진행분을 커밋하고 다음 날 자동으로 이어서 받는다.
+# 이미 완료된 경우 climatology.py 는 호출 없이 바로 끝난다.
 on:
   workflow_dispatch:
   push:
@@ -11,32 +12,23 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: era5
+  cancel-in-progress: false
+
 jobs:
   era5:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
-      - uses: actions/checkout@v4
-      - name: 완료 여부 확인
-        id: chk
-        run: |
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import numpy as np, os
-          p = "pipeline/cache/era5_daily.npz"
-          done = os.path.exists(p) and bool(np.load(p)["done"].all())
-          print(f"done={'true' if done else 'false'}")
-          PY
-      - uses: actions/setup-python@v5
-        if: steps.chk.outputs.done != 'true'
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - if: steps.chk.outputs.done != 'true'
-        run: pip install -r pipeline/requirements.txt
+      - run: pip install -r pipeline/requirements.txt
       - name: ERA5 1991–2020 수집
-        if: steps.chk.outputs.done != 'true'
         run: python pipeline/climatology.py || echo "미완료 - 다음 실행에서 이어받음"
       - name: 캐시 커밋
-        if: steps.chk.outputs.done != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
