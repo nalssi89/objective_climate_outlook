@@ -16,6 +16,7 @@ PROBES = [
     ("ASOS 일자료 기간(서울, 10일)", "kma_sfcdd3.php", {"tm1": "20150701", "tm2": "20150710", "stn": "108", "help": "1"}),
     ("일 평년값", "sfc_norm1.php", {"norm": "D", "tmst": "2021", "stn": "0", "MM1": "5", "DD1": "1", "MM2": "5", "DD2": "2", "help": "1"}),
     ("지점 정보", "stn_inf.php", {"inf": "SFC", "stn": "", "tm": "202410290900", "help": "1"}),
+    ("ASOS 일자료 CSV(disp=0, 서울·강릉)", "kma_sfcdd.php", {"tm": "19910115", "stn": "108:105", "disp": "0", "help": "0"}),
 ]
 
 
