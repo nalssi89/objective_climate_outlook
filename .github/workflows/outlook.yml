@@ -1,11 +1,12 @@
 name: 객관기후예측 갱신
 
 # EC46 은 매일 20:30 UTC, SEAS5 는 매월 5일 갱신 → 매일 22:10 UTC(07:10 KST) 산출
+# 산출 결과를 포함한 웹사이트 전체를 gh-pages 브랜치에 올린다 (Settings → Pages → Deploy from a branch → gh-pages)
 on:
   schedule:
     - cron: "10 22 * * *"
   push:
-    paths: ["pipeline/**", ".github/workflows/outlook.yml"]
+    paths: ["pipeline/**", "site/**", ".github/workflows/outlook.yml"]
   workflow_dispatch:
     inputs:
       demo:
@@ -15,8 +16,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: outlook
@@ -34,29 +33,15 @@ jobs:
       - run: pip install -r pipeline/requirements.txt
       - name: 전망 산출
         run: python pipeline/outlook.py ${{ inputs.demo && '--demo' || '' }}
-      - name: 산출 자료를 outlook-data 브랜치에 저장(단일 커밋, 이력 누적 없음)
+      - name: 웹사이트를 gh-pages 브랜치에 게시(단일 커밋, 이력 누적 없음)
         run: |
           set -e
-          cp -r site/data/latest /tmp/latest
-          cd /tmp/latest
-          git init -q -b outlook-data
+          cp -r site /tmp/pages
+          touch /tmp/pages/.nojekyll
+          cd /tmp/pages
+          git init -q -b gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -q -m "outlook $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" outlook-data
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-  deploy:
-    # 저장소 Settings → Pages → Source 를 "GitHub Actions" 로 설정해야 동작
-    needs: build
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages

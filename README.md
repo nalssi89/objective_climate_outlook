@@ -44,7 +44,7 @@ python -m http.server -d site 8000  # http://localhost:8000
 ```
 
 저장소에 들어 있는 `site/data/latest/`는 **DEMO(합성) 자료**입니다. 실제 전망은 GitHub Actions가 매일 만들어
-`outlook-data` 브랜치와 GitHub Pages에 올립니다. Pages를 쓰려면 저장소 **Settings → Pages → Source: GitHub Actions**로 설정하세요.
+`gh-pages` 브랜치에 웹사이트째 올립니다. 저장소 **Settings → (왼쪽 메뉴) Pages → Build and deployment → Source: Deploy from a branch → Branch: `gh-pages` / `(root)` → Save** 로 설정하면 `https://nalssi89.github.io/objective_climate_outlook/` 에서 열립니다.
 
 ## 방법 요약
 
