@@ -65,18 +65,24 @@ def elev():
         return
     flat = [(i, p) for i, s in enumerate(g["samples"]) for p in s]
     vals = np.full(len(flat), np.nan)
-    for k in range(0, len(flat), 100):
-        chunk = flat[k:k + 100]
+    for k in range(0, len(flat), 50):
+        chunk = flat[k:k + 50]
         params = {"latitude": ",".join(str(p[0]) for _, p in chunk), "longitude": ",".join(str(p[1]) for _, p in chunk)}
-        for attempt in range(6):
-            r = requests.get("https://api.open-meteo.com/v1/elevation", params=params, timeout=60)
-            if r.status_code == 200:
-                vals[k:k + len(chunk)] = r.json()["elevation"]
-                break
-            print(f"  ! elevation HTTP {r.status_code}; retry")
+        for attempt in range(8):
+            try:
+                r = requests.get("https://api.open-meteo.com/v1/elevation", params=params, timeout=90)
+                if r.status_code == 200:
+                    vals[k:k + len(chunk)] = r.json()["elevation"]
+                    break
+                print(f"  ! elevation HTTP {r.status_code}; retry")
+            except requests.RequestException as e:
+                print(f"  ! elevation {type(e).__name__}; retry")
             time.sleep(10 * (attempt + 1))
         time.sleep(1)
+    print(f"  samples with elevation: {np.isfinite(vals).mean():.0%}")
     cells = np.array([i for i, _ in flat])
+    if np.isfinite(vals).mean() < 0.9:
+        raise SystemExit("고도 표본이 90% 미만 — 다시 실행하세요")
     g["elev"] = [round(float(np.nanmean(np.maximum(vals[cells == i], 0))), 1) for i in range(len(g["points"]))]
     json.dump(g, open(OUT, "w"), separators=(",", ":"))
     print(f"elevation: mean {np.mean(g['elev']):.0f} m, max {np.max(g['elev']):.0f} m")
