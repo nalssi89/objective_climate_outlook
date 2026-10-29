@@ -1,0 +1,20 @@
+name: 기상청 API 허브 확인
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ["pipeline/kma_probe.py", ".github/workflows/kma_probe.yml"]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python pipeline/kma_probe.py
+        env:
+          KMA_APIHUB_KEY: ${{ secrets.KMA_APIHUB_KEY }}
