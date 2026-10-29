@@ -21,7 +21,7 @@ SFCDD_COLS = [
 ]
 # 전망 요소 ↔ ASOS 일자료 열
 ELEMENTS = {"t2m": "TA_AVG", "precip": "RN_DAY", "rad": "SI_DAY", "wind": "WS_AVG"}
-MISSING = {-9.0, -9.9, -99.0, -99.9, -999.0}
+MISSING = {-9.0, -99.0, -99.9, -999.0}
 
 
 def key():
@@ -63,16 +63,6 @@ def parse_rows(text):
     return rows
 
 
-def header_cols(text):
-    """주석 줄 중 열 이름 행(# YYMMDD STN ... / # TM,STN,...)을 찾는다. 없으면 None."""
-    for ln in text.splitlines():
-        if ln.startswith("#") and "STN" in ln.upper():
-            toks = [t for t in ln.lstrip("#").replace(",", " ").split() if t]
-            if len(toks) > 5:
-                return toks
-    return None
-
-
 def to_float(v):
     try:
         x = float(v)
@@ -81,14 +71,57 @@ def to_float(v):
     return np.nan if x in MISSING else x
 
 
+def _records(text):
+    """응답 행 → [{열: 값}] (머리말의 축약 열 이름은 쓰지 않고 도움말 순서 SFCDD_COLS 사용)."""
+    out = []
+    for row in parse_rows(text):
+        if len(row) < 39 or not row[0].isdigit():
+            continue
+        out.append(dict(zip(SFCDD_COLS, row)))
+    return out
+
+
+def element_value(rec, col):
+    """결측 처리.
+
+    - 기온(TA_*)은 -9.0 이 실제 값일 수 있으므로 -50 이하만 결측
+    - 강수(RN_DAY)의 -9 는 '강수 없음'으로 보고 0 (같은 날 기온이 정상일 때만)
+    """
+    if col.startswith("TA"):
+        try:
+            v = float(rec.get(col))
+        except (TypeError, ValueError):
+            return np.nan
+        return np.nan if v <= -50 else v
+    v = to_float(rec.get(col))
+    if col == "RN_DAY" and np.isnan(v) and np.isfinite(element_value(rec, "TA_AVG")):
+        return 0.0
+    return v
+
+
 def sfcdd_day(day, stn="0"):
     """하루치 ASOS 일자료 {지점번호: {열: 값}}. day: 'YYYYMMDD'."""
     text = get_text("kma_sfcdd.php", {"tm": day, "stn": stn, "disp": "0", "help": "0"})
-    cols = header_cols(text) or SFCDD_COLS  # 응답 머리말에 열 이름이 있으면 그것을 우선
-    out = {}
-    for row in parse_rows(text):
-        if len(row) < 3:
+    return {int(r["STN"]): r for r in _records(text)}
+
+
+def sfcdd_range(stn, tm1, tm2):
+    """한 지점의 기간 일자료 [{열: 값}] (kma_sfcdd3.php). tm1/tm2: 'YYYYMMDD'."""
+    text = get_text("kma_sfcdd3.php", {"tm1": tm1, "tm2": tm2, "stn": str(stn), "disp": "0", "help": "0"})
+    return _records(text)
+
+
+def stations(tm="202012310900"):
+    """ASOS 지점 정보 [{stn, lon, lat, ht, name, name_en}]."""
+    text = get_text("stn_inf.php", {"inf": "SFC", "stn": "", "tm": tm, "help": "0"})
+    out = []
+    for ln in text.splitlines():
+        if not ln.strip() or ln.lstrip().startswith("#"):
             continue
-        rec = dict(zip(cols, row))
-        out[int(float(rec["STN"]))] = rec
+        t = ln.split()
+        try:
+            out.append({"stn": int(t[0]), "lon": float(t[1]), "lat": float(t[2]), "ht": float(t[4]),
+                        "name": t[10], "name_en": t[11]})
+        except (IndexError, ValueError):
+            continue
     return out

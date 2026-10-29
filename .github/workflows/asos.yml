@@ -1,0 +1,37 @@
+name: ASOS 관측 평년 구축
+
+# 지점 상세화용 ASOS 1991–2020 일자료 수집(이어받기). 실패하면 진행분을 커밋하고 다시 실행하면 이어받는다.
+on:
+  workflow_dispatch:
+  push:
+    paths: ["pipeline/asos.py", "pipeline/kma.py", ".github/workflows/asos.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: asos
+  cancel-in-progress: false
+
+jobs:
+  asos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r pipeline/requirements.txt
+      - name: ASOS 1991–2020 수집
+        run: python pipeline/asos.py || echo "미완료 - 다시 실행하면 이어받음"
+        env:
+          KMA_APIHUB_KEY: ${{ secrets.KMA_APIHUB_KEY }}
+      - name: 요약
+        run: python pipeline/asos.py --info | head -120
+      - name: 캐시 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pipeline/cache/asos_daily.npz || true
+          git diff --cached --quiet || (git commit -m "ASOS 관측 평년 캐시 갱신" && git pull --rebase -q && git push)
