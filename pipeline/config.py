@@ -64,6 +64,6 @@ DEFAULT_SPREAD = {
 }
 
 PRODUCTS = {
-    "1m": {"name": "1개월 전망", "model": "ecmwf_ec46", "model_name": "ECMWF EC46 (51 멤버)", "forecast_days": 42},
+    "1m": {"name": "1개월 전망", "model": "ecmwf_ec46", "model_name": "ECMWF EC46 (51 멤버)", "forecast_days": 46},
     "3m": {"name": "3개월 전망", "model": "ecmwf_seas5", "model_name": "ECMWF SEAS5 (51 멤버)", "forecast_days": 130},
 }

@@ -33,14 +33,10 @@ def define_periods(key, dates, weekly_block, issue):
     d2i = {d: i for i, d in enumerate(dates)}
     periods = []
     if key == "1m":
-        starts = []
-        if weekly_block and weekly_block.get("time"):
-            starts = [dt.date.fromisoformat(t[:10]) for t in weekly_block["time"]]
-        starts = [s for s in starts if s > issue and s + dt.timedelta(days=6) in d2i]
-        if not starts:  # 주 경계를 알 수 없으면 다음 월요일부터
-            s = issue + dt.timedelta(days=(7 - issue.weekday()) % 7 or 7)
-            starts = [s + dt.timedelta(days=7 * k) for k in range(6)]
-            starts = [x for x in starts if x + dt.timedelta(days=6) in d2i]
+        # 주는 월요일 시작–일요일 끝. 1주는 발표일 다음 주 월요일의 그다음 주(예: 10/29(목) 발표 → 11/9–11/15)
+        s0 = issue + dt.timedelta(days=(7 - issue.weekday()) % 7 or 7) + dt.timedelta(days=7)
+        starts = [s0 + dt.timedelta(days=7 * k) for k in range(4)]
+        starts = [x for x in starts if x + dt.timedelta(days=6) in d2i]
         for k, s in enumerate(starts[:4]):
             e = s + dt.timedelta(days=6)
             periods.append({"id": f"w{k + 1}", "kind": "week", "label": f"{k + 1}주", "start": s, "end": e})
