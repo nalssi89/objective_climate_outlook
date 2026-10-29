@@ -146,7 +146,8 @@
           </svg>
         </figure>
         <p>서버 없이 동작하는 정적 사이트다. 계산은 모두 배치(파이썬)에서 하고, 브라우저는 산출된 JSON만 읽는다.
-          매일 산출된 자료와 웹사이트는 <code>gh-pages</code> 브랜치(단일 커밋)에 게시되어 GitHub Pages로 서비스된다.</p>
+          매일 산출된 자료와 웹사이트는 <code>gh-pages</code> 브랜치(단일 커밋)에 게시되어 GitHub Pages로 서비스된다.
+          정기 실행은 매일 07:10 KST(예비 12:10 KST)이며, 지도 자료는 45일간 날짜별로 보관되어 화면의 ‘발표일’ 목록에서 지난 발표를 다시 볼 수 있다.</p>
         <pre class="code">pip install -r pipeline/requirements.txt
 python pipeline/climatology.py     # ERA5 평년 캐시 (최초 1회, 이어받기)
 python pipeline/outlook.py         # 전망 산출 → site/data/latest/

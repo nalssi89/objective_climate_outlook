@@ -46,6 +46,15 @@ python -m http.server -d site 8000  # http://localhost:8000
 저장소에 들어 있는 `site/data/latest/`는 **DEMO(합성) 자료**입니다. 실제 전망은 GitHub Actions가 매일 만들어
 `gh-pages` 브랜치에 웹사이트째 올립니다. 저장소 **Settings → (왼쪽 메뉴) Pages → Build and deployment → Source: Deploy from a branch → Branch: `gh-pages` / `(root)` → Save** 로 설정하면 `https://nalssi89.github.io/objective_climate_outlook/` 에서 열립니다.
 
+## 자동 갱신
+
+- **매일 07:10 KST**(22:10 UTC) GitHub Actions가 최신 EC46·SEAS5를 받아 다시 산출·게시합니다. 12:10 KST에 한 번 더 돌려 아침 실행이 실패해도 그날 안에 갱신됩니다.
+- 1개월 전망(EC46)은 매일 새 예측이 나오고, 3개월 전망(SEAS5)은 매월 5일에 바뀝니다.
+- 매일 발표분 지도 자료는 45일간 보관되어, 지도 왼쪽 **발표일** 목록에서 지난 발표를 골라 같은 주간의 예측이 어떻게 바뀌어 왔는지 비교할 수 있습니다.
+- 마지막 발표가 30시간을 넘기면 화면 상단에 '갱신 지연'이 표시됩니다.
+- 수동 실행: 저장소 **Actions → 객관기후예측 갱신 → Run workflow**.
+- 공개 저장소에서 60일 동안 활동(커밋)이 없으면 GitHub가 예약 실행을 멈춥니다. 그럴 때는 Actions 화면의 안내에 따라 다시 켜면 됩니다.
+
 ## 방법 요약
 
 1. 멤버별 일별값을 주·월·계절로 집계(강수 누적, 그 밖에는 평균)

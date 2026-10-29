@@ -1,13 +1,11 @@
 name: ERA5 평년값 구축
 
-# 최초 1회(이어받기). Open-Meteo 일일 호출 한도에 걸리면 진행분을 커밋하고 다음 날 자동으로 이어서 받는다.
+# 최초 1회(이어받기, 2026-10-29 완료). 호출 한도에 걸리면 진행분을 커밋하므로 다시 실행해 이어받는다.
 # 이미 완료된 경우 climatology.py 는 호출 없이 바로 끝난다.
 on:
   workflow_dispatch:
   push:
     paths: ["pipeline/climatology.py", ".github/workflows/climatology.yml"]
-  schedule:
-    - cron: "40 3 * * *"
 
 permissions:
   contents: write

@@ -4,9 +4,11 @@
   const K = window.KCO;
   const $ = (id) => document.getElementById(id);
 
-  const state = { product: '1m', var: 't2m', period: null, display: 'tercile', thr: null, side: 'high' };
-  let manifest, grid, renderer, map, overlay, gridLayer, tileLayer, selMarker;
+  const state = { issue: 'latest', product: '1m', var: 't2m', period: null, display: 'tercile', thr: null, side: 'high' };
+  let manifest, latestManifest, archive, grid, renderer, map, overlay, gridLayer, tileLayer, selMarker;
   const maps = {};
+  // 선택한 발표일의 자료 경로 (latest = 최신, 그 밖에는 data/archive/<날짜>/)
+  const base = () => (state.issue === 'latest' ? K.DATA : `data/archive/${state.issue}/`);
 
   // ---------------------------------------------------------------- 초기화
   async function init() {
@@ -23,15 +25,68 @@
     renderer = new K.FieldRenderer(grid, korea);
     if (!manifest.products[state.product]) state.product = Object.keys(manifest.products)[0];
 
-    const issued = new Date(manifest.issued);
-    $('issue').innerHTML = `<b>발표</b> ${issued.getFullYear()}.${issued.getMonth() + 1}.${issued.getDate()} ` +
-      `${String(issued.getHours()).padStart(2, '0')}:${String(issued.getMinutes()).padStart(2, '0')} KST` +
-      (manifest.demo ? ' <span class="badge warn">DEMO 합성자료</span>' : ' <span class="badge">Open-Meteo 실자료</span>');
-    $('demoRibbon').hidden = !manifest.demo;
+    latestManifest = manifest;
+    archive = await K.getJSON('data/archive/index.json').catch(() => null);
+    if (state.issue !== 'latest') {
+      if (archive && archive.issues.some((e) => e.date === state.issue)) {
+        manifest = await K.getJSON(base() + 'manifest.json');
+      } else {
+        state.issue = 'latest';
+      }
+    }
+    buildIssueSelect();
+    renderIssueInfo();
 
     initMap(korea, neighbors);
     buildStaticControls();
     await update();
+  }
+
+  // ---------------------------------------------------------------- 발표일 · 갱신 정보
+  const KST_MS = 9 * 3600 * 1000;
+  const kstParts = (d) => {
+    const k = new Date(d.getTime() + KST_MS);
+    return { y: k.getUTCFullYear(), m: k.getUTCMonth() + 1, d: k.getUTCDate(), hh: k.getUTCHours(), mm: k.getUTCMinutes() };
+  };
+  const fmtKST = (d) => {
+    const p = kstParts(d);
+    return `${p.y}.${p.m}.${p.d} ${String(p.hh).padStart(2, '0')}:${String(p.mm).padStart(2, '0')} KST`;
+  };
+  // 정기 갱신: 매일 07:10 KST (GitHub Actions 22:10 UTC)
+  function nextUpdate(now = new Date()) {
+    const t = new Date(now);
+    t.setUTCHours(22, 10, 0, 0);
+    if (t <= now) t.setUTCDate(t.getUTCDate() + 1);
+    return t;
+  }
+
+  function renderIssueInfo() {
+    const issued = new Date(manifest.issued);
+    const latest = new Date(latestManifest.issued);
+    const ageH = (Date.now() - latest.getTime()) / 3600e3;
+    const nu = kstParts(nextUpdate());
+    let html = `<b>발표</b> ${fmtKST(issued)}` +
+      (manifest.demo ? ' <span class="badge warn">DEMO 합성자료</span>' : ' <span class="badge">Open-Meteo 실자료</span>');
+    if (state.issue !== 'latest') html += ' <span class="badge warn">지난 발표</span>';
+    else if (!latestManifest.demo && ageH > 30) html += ` <span class="badge warn" title="정기 갱신이 늦어지고 있습니다">갱신 지연 ${Math.floor(ageH)}시간</span>`;
+    $('issue').innerHTML = html;
+    $('demoRibbon').hidden = !manifest.demo;
+    $('updateHint').textContent = `1개월(EC46)은 매일, 3개월(SEAS5)은 매월 5일 모델이 갱신됩니다. 다음 정기 갱신 ${nu.m}/${nu.d} 07:10 KST.`;
+  }
+
+  function buildIssueSelect() {
+    const sel = $('issueSel');
+    const latestDay = latestManifest.issued.slice(0, 10);
+    const opts = [['latest', `최신 · ${latestDay}`]];
+    for (const e of (archive && archive.issues) || []) if (e.date !== latestDay) opts.push([e.date, e.date]);
+    sel.innerHTML = opts.map(([v, l]) => `<option value="${v}" ${v === state.issue ? 'selected' : ''}>${l}</option>`).join('');
+    sel.disabled = opts.length < 2;
+    sel.onchange = async () => {
+      state.issue = sel.value;
+      manifest = state.issue === 'latest' ? latestManifest : await K.getJSON(base() + 'manifest.json');
+      renderIssueInfo();
+      await update();
+    };
   }
 
   function initTheme() {
@@ -49,10 +104,11 @@
 
   function readHash() {
     const h = new URLSearchParams(location.hash.slice(1));
-    for (const k of ['product', 'var', 'period', 'display', 'thr', 'side']) if (h.get(k)) state[k] = h.get(k);
+    for (const k of ['issue', 'product', 'var', 'period', 'display', 'thr', 'side']) if (h.get(k)) state[k] = h.get(k);
   }
   function writeHash() {
     const h = new URLSearchParams();
+    if (state.issue !== 'latest') h.set('issue', state.issue);
     for (const k of ['product', 'var', 'period', 'display']) h.set(k, state[k]);
     if (state.display === 'threshold') h.set('thr', state.thr);
     if (state.display === 'extreme') h.set('side', state.side);
@@ -164,7 +220,7 @@
   }
 
   function currentField(pid = state.period) {
-    return maps[state.product].fields[state.var][pid];
+    return maps[base() + state.product].fields[state.var][pid];
   }
 
   // 표출 항목 → [레이어 배열], 색 함수, 범례
@@ -204,7 +260,9 @@
 
   // ---------------------------------------------------------------- 갱신
   async function update() {
-    if (!maps[state.product]) maps[state.product] = await K.getJSON(K.DATA + `map_${state.product}.json`);
+    if (!manifest.products[state.product]) state.product = Object.keys(manifest.products)[0];
+    const mk = base() + state.product;
+    if (!maps[mk]) maps[mk] = await K.getJSON(base() + `map_${state.product}.json`);
     const P = manifest.products[state.product];
     if (!P.periods.find((p) => p.id === state.period)) state.period = P.periods[0].id;
     if (!manifest.variables[state.var]) state.var = 't2m';
@@ -225,7 +283,8 @@
     const extra = state.display === 'threshold' ? ` · ${K.thresholdLabel(state.thr, V)}` :
       state.display === 'extreme' ? ` · ${state.side === 'high' ? '상위' : '하위'} 10%` : '';
     $('mapTitle').textContent = `${V.name} · ${dname}${extra}`;
-    $('mapSub').textContent = `${P.name} ${period.label} (${period.start} ~ ${period.end}) · ${P.model}`;
+    $('mapSub').textContent = (state.issue === 'latest' ? '' : `[지난 발표 ${state.issue}] `) +
+      `${P.name} ${period.label} (${period.start} ~ ${period.end}) · ${P.model}`;
     $('explain').textContent = K.PRODUCTS[state.display].desc + (state.display === 'mean' || state.display === 'anom'
       ? ` 단위: ${V.agg === 'sum' ? '기간 누적' : '기간 평균'} ${V.unit}.` : '');
     renderLegend(sp);
@@ -307,7 +366,8 @@
     if (selMarker) selMarker.setLatLng([la, lo]);
     else selMarker = L.circleMarker([la, lo], { pane: 'labels', radius: 7, className: 'selpt', interactive: false }).addTo(map);
     const city = K.nearestCity(la, lo);
-    $('pointWinTitle').textContent = `${city ? city + ' · ' : ''}격자 ${la.toFixed(1)}°N ${lo.toFixed(1)}°E`;
+    $('pointWinTitle').textContent = `${city ? city + ' · ' : ''}격자 ${la.toFixed(1)}°N ${lo.toFixed(1)}°E` +
+      (state.issue === 'latest' ? '' : ' (지점 상세는 최신 발표 기준)');
     setFrame(index);
     const w = $('pointWin');
     if (w.hidden) {

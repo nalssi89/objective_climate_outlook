@@ -1,10 +1,12 @@
 name: 객관기후예측 갱신
 
 # EC46 은 매일 20:30 UTC, SEAS5 는 매월 5일 갱신 → 매일 22:10 UTC(07:10 KST) 산출
+# 03:10 UTC(12:10 KST) 재실행은 아침 실행이 실패·지연됐을 때를 대비한 예비 실행(같은 날 발표분을 덮어씀)
 # 산출 결과를 포함한 웹사이트 전체를 gh-pages 브랜치에 올린다 (Settings → Pages → Deploy from a branch → gh-pages)
 on:
   schedule:
     - cron: "10 22 * * *"
+    - cron: "10 3 * * *"
   push:
     paths: ["pipeline/**", "site/**", ".github/workflows/outlook.yml"]
   workflow_dispatch:
@@ -33,6 +35,12 @@ jobs:
       - run: pip install -r pipeline/requirements.txt
       - name: 전망 산출
         run: python pipeline/outlook.py ${{ inputs.demo && '--demo' || '' }}
+      - name: 지난 발표 보관(gh-pages 의 archive 이어받기 + 오늘 발표 추가, 45일 보관)
+        run: |
+          git clone -q --depth 1 -b gh-pages "https://github.com/${{ github.repository }}.git" /tmp/prev || true
+          mkdir -p site/data/archive
+          if [ -d /tmp/prev/data/archive ]; then cp -r /tmp/prev/data/archive/. site/data/archive/; fi
+          python pipeline/archive.py
       - name: 웹사이트를 gh-pages 브랜치에 게시(단일 커밋, 이력 누적 없음)
         run: |
           set -e
