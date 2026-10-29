@@ -120,7 +120,8 @@
     let bands, lines, rows, unit = V.unit;
     if (st.ts === 'cum' && d.cum) {
       let acc = 0;
-      const normalCum = d.normal ? d.normal.map((v) => (v == null ? null : +(acc += v).toFixed(1))) : null;
+      const start = d.cum.p50.findIndex((v) => v != null);
+      const normalCum = d.normal ? d.normal.map((v, i) => (v == null || i < start ? null : +(acc += v).toFixed(1))) : null;
       bands = [
         { lo: d.cum.p10, hi: d.cum.p90, color: blue, opacity: 0.18, label: '10–90%' },
         { lo: d.cum.p25, hi: d.cum.p75, color: blue, opacity: 0.32, label: '25–75%' },

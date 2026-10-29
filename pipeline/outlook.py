@@ -12,6 +12,7 @@ import argparse
 import datetime as dt
 import json
 import shutil
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "data" / "latest"
 KST = dt.timezone(dt.timedelta(hours=9))
 PCTS = [10, 25, 50, 75, 90]
+warnings.filterwarnings("ignore", category=RuntimeWarning)  # 결측 구간 nan 통계 경고
 
 
 # ---------------------------------------------------------------- 기간 정의
@@ -280,7 +282,10 @@ def compute_product(key, resp, points, clim, issue, clim_rates=None):
             mean = np.nanmean(Dd, axis=1)
         dd = {"q": q, "mean": mean}
         if V["agg"] == "sum":
-            cum = np.nancumsum(Dd, axis=2)
+            # 누적은 첫 예측기간 시작일부터
+            cum = np.full(Dd.shape, np.nan)
+            i0 = periods[0]["i0"]
+            cum[:, :, i0:] = np.nancumsum(Dd[:, :, i0:], axis=2)
             dd["cq"] = np.nanpercentile(cum, [10, 25, 50, 75, 90], axis=1)
             dd["cmean"] = np.nanmean(cum, axis=1)
         if clim:
