@@ -117,9 +117,12 @@ body.tiles .kr-land { fill-opacity: 0.2; }
 .fieldimg { image-rendering: auto; opacity: 0.93; }
 .gridpt { fill: var(--ink); fill-opacity: 0.55; stroke: none; }
 .selpt { fill: none; stroke: var(--ink); stroke-width: 2.5; }
+.stnpt { stroke: var(--ink); cursor: pointer; }
+.stntip { font: inherit; font-size: 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .city i { position: absolute; left: 1px; top: 1px; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--surface); }
 .city span { position: absolute; left: 10px; top: -6px; white-space: nowrap; font-size: 11.5px; font-weight: 600; color: var(--ink); text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface), 0 0 2px var(--surface); pointer-events: none; }
 .city { cursor: pointer; }
+body.stn-on .city i { display: none; }
 .hoverbox { position: absolute; z-index: 800; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; box-shadow: var(--shadow); font-size: 13px; min-width: 150px; }
 .hoverbox .hl { color: var(--muted); font-size: 11.5px; margin-bottom: 2px; }
 .hoverbox .tri { display: flex; gap: 10px; }

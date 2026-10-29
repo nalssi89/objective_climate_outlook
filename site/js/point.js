@@ -4,7 +4,10 @@
   const K = window.KCO;
   const $ = (id) => document.getElementById(id);
   const q = new URLSearchParams(location.search);
-  const st = { i: +(q.get('i') || 0), p: q.get('p') || '1m', v: q.get('v') || 't2m', period: q.get('period'), ts: 'daily' };
+  const st = { i: +(q.get('i') || 0), s: q.get('s'), f: q.get('f'), p: q.get('p') || '1m', v: q.get('v') || 't2m', period: q.get('period'), ts: 'daily' };
+  const isStn = () => data && data.kind === 'station';
+  const isFine = () => data && data.kind === 'fine';
+  const isObs = () => isStn() || isFine(); // 관측 평년 기준 상세화 자료
   if (q.get('embed')) document.body.classList.add('embed');
   let manifest, grid, data;
 
@@ -18,14 +21,14 @@
   async function init() {
     try {
       [manifest, grid] = await Promise.all([K.getJSON(K.DATA + 'manifest.json'), K.getJSON('data/grid.json')]);
-      data = await K.getJSON(K.DATA + `points/${st.i}.json`);
+      data = await K.getJSON(K.DATA + (st.s ? `stations/${st.s}.json` : st.f != null ? `fine/${st.f}.json` : `points/${st.i}.json`));
     } catch (e) {
       $('ptTitle').textContent = '자료를 불러올 수 없습니다';
       console.error(e);
       return;
     }
     if (!data[st.p]) st.p = Object.keys(manifest.products).find((k) => data[k]);
-    if (!manifest.variables[st.v]) st.v = 't2m';
+    if (!manifest.variables[st.v] || (data.missing || []).includes(st.v)) st.v = 't2m';
     try { const t = localStorage.getItem('kco-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* 무시 */ }
     render();
     let rt;
@@ -49,13 +52,24 @@
     const P = manifest.products[st.p];
     const V = manifest.variables[st.v];
     const city = K.nearestCity(data.lat, data.lon);
-    document.title = `${city || ''} ${data.lat}°N ${data.lon}°E · ${P.name}`;
-    $('ptTitle').textContent = `${city ? city + ' 부근 · ' : ''}${data.lat.toFixed(1)}°N ${data.lon.toFixed(1)}°E`;
-    $('ptSub').textContent = `${P.name} · ${P.model} · 발표 ${manifest.issued.slice(0, 10)}${manifest.demo ? ' · DEMO 합성자료' : ''} · 0.5° 격자값`;
+    if (isStn()) {
+      document.title = `ASOS ${data.name} · ${P.name}`;
+      $('ptTitle').textContent = `ASOS ${data.name}(${data.stn}) · 해발 ${Math.round(data.ht)} m`;
+    } else if (isFine()) {
+      document.title = `${city || ''} 20 km 상세화 · ${P.name}`;
+      $('ptTitle').textContent = `${city ? city + ' 부근 · ' : ''}${data.lat.toFixed(1)}°N ${data.lon.toFixed(1)}°E` +
+        (data.ht != null ? ` · 평균 해발 ${Math.round(data.ht)} m` : '');
+    } else {
+      document.title = `${city || ''} ${data.lat}°N ${data.lon}°E · ${P.name}`;
+      $('ptTitle').textContent = `${city ? city + ' 부근 · ' : ''}${data.lat.toFixed(1)}°N ${data.lon.toFixed(1)}°E`;
+    }
+    $('ptSub').textContent = `${P.name} · ${P.model} · 발표 ${manifest.issued.slice(0, 10)}${manifest.demo ? ' · DEMO 합성자료' : ''} · ` +
+      (isStn() ? '관측 평년(1991–2020) 기준 지점 상세화' : isFine() ? '20 km(0.2°) 상세화 · ASOS 관측 평년 보간' : '0.5° 격자값');
     seg($('pProductSeg'), Object.entries(manifest.products).map(([k, p]) => [k, p.name]), st.p, (v) => { st.p = v; sync(); render(); });
     const tabs = $('varTabs');
     tabs.innerHTML = '';
     for (const [k, vv] of Object.entries(manifest.variables)) {
+      if ((data.missing || []).includes(k)) continue; // 관측하지 않는 요소(일사 등)
       const b = document.createElement('button');
       b.type = 'button';
       b.setAttribute('role', 'tab');
@@ -127,7 +141,7 @@
         { lo: d.cum.p25, hi: d.cum.p75, color: blue, opacity: 0.32, label: '25–75%' },
       ];
       lines = [{ v: d.cum.p50, color: blueD, width: 2, label: '중앙값' }];
-      if (normalCum) lines.push({ v: normalCum, color: ink2, width: 1.6, dash: '5 4', label: '평년 누적(ERA5)' });
+      if (normalCum) lines.push({ v: normalCum, color: ink2, width: 1.6, dash: '5 4', label: isObs() ? '평년 누적(관측)' : '평년 누적(ERA5)' });
       rows = (i) => [['90%', K.fmt(d.cum.p90[i], 0) + ' mm'], ['중앙값', K.fmt(d.cum.p50[i], 0) + ' mm', blueD], ['10%', K.fmt(d.cum.p10[i], 0) + ' mm'],
         ...(normalCum ? [['평년 누적', K.fmt(normalCum[i], 0) + ' mm', ink2]] : [])];
       unit = 'mm (누적)';
@@ -138,7 +152,7 @@
         { lo: d.p25, hi: d.p75, color: blue, opacity: 0.3, label: '25–75%' },
       ];
       lines = [{ v: d.p50, color: blueD, width: 2, label: '중앙값' }];
-      if (d.normal) lines.push({ v: d.normal, color: ink2, width: 1.6, dash: '5 4', label: '일평년값(ERA5)' });
+      if (d.normal) lines.push({ v: d.normal, color: ink2, width: 1.6, dash: '5 4', label: isObs() ? '일평년값(관측)' : '일평년값(ERA5)' });
       const u = ' ' + V.unit;
       rows = (i) => [['최대', K.fmt(d.max[i], dg) + u], ['90%', K.fmt(d.p90[i], dg) + u], ['중앙값', K.fmt(d.p50[i], dg) + u, blueD],
         ['평균', K.fmt(d.mean[i], dg) + u], ['10%', K.fmt(d.p10[i], dg) + u], ['최소', K.fmt(d.min[i], dg) + u],
@@ -177,7 +191,7 @@
     const rows = [
       ['group', '값'],
       ['앙상블 평균', R.map((r) => f(r.mean))],
-      ['모델 평년값', R.map((r) => f(r.clim) + (r.clim_src === 'era5' ? '<sup title="ERA5 평년값 사용(모델 편차 미보정)">E</sup>' : ''))],
+      [isObs() ? '관측 평년값' : '모델 평년값', R.map((r) => f(r.clim) + (r.clim_src === 'era5' ? '<sup title="ERA5 평년값 사용(모델 편차 미보정)">E</sup>' : ''))],
       [V.mode === 'add' ? '평년편차' : '평년편차 (평년비)', R.map((r) => (r.anom > 0 ? '+' : '') + f(r.anom) + (V.mode === 'mul' ? ` (${f(r.anom_pct, 0)}%)` : ''))],
       ['앙상블 스프레드(σ)', R.map((r) => f(r.spread))],
       ['멤버 10%', R.map((r) => f(r.q[0]))],
@@ -222,9 +236,14 @@
       return `<tr><th>${lab}</th>${vals.map((v) => (kind ? probCell(v, kind) : `<td>${v}</td>`)).join('')}</tr>`;
     }).join('');
     $('statTable').innerHTML = head + '<tbody>' + body + '</tbody>';
-    $('tableNote').innerHTML = `${V.agg === 'sum' ? '기간 누적' : '기간 평균'} 기준. 확률은 ${manifest.products[st.p].members[st.v] || 51}개 멤버 중 해당 조건을 만족하는 멤버의 비율. ` +
-      '평년값은 ECMWF 모델 기후값(= 예측 − ECMWF 편차)으로 모델의 계통오차를 제거했으며, ' +
-      '<sup>E</sup> 표시는 ECMWF 편차를 쓸 수 없어 ERA5 평년값을 사용한 경우. 평년 분포 경계는 ERA5 1991–2020 동일 기간 30년 분포의 형태를 모델 평년값에 적용.';
+    $('tableNote').innerHTML = `${V.agg === 'sum' ? '기간 누적' : '기간 평균'} 기준. 확률은 ${manifest.products[st.p].members[st.v] || 51}개 멤버 중 해당 조건을 만족하는 멤버의 비율. ` + (isFine()
+      ? '20 km 상세화: ASOS 지점의 관측 평년(1991–2020)과 분포를 이 격자로 보간했습니다(기온은 기온감률 6.5°C/km로 고도 보정). ' +
+        '여기에 주변 모델 격자의 멤버별 평년편차(기온)·평년비(그 외)를 적용했습니다. 지점 간격(평균 약 40 km)보다 작은 규모의 지형 효과는 고도 보정 외에는 반영되지 않습니다.'
+      : isStn()
+      ? '지점 상세화: 주변 격자의 멤버별 평년편차(기온) 또는 평년비(강수·일사·풍속)를 이 지점으로 보간해 ASOS 관측 평년(1991–2020)에 적용했습니다. ' +
+        '평년값과 분포 경계는 이 지점의 30년 관측에서 직접 계산했습니다. 일별 시계열은 모델 값을 관측 평년 수준으로 보정한 것입니다.'
+      : '평년값은 ECMWF 모델 기후값(= 예측 − ECMWF 편차)으로 모델의 계통오차를 제거했으며, ' +
+      '<sup>E</sup> 표시는 ECMWF 편차를 쓸 수 없어 ERA5 평년값을 사용한 경우. 평년 분포 경계는 ERA5 1991–2020 동일 기간 30년 분포의 형태를 모델 평년값에 적용.');
 
     const ec = data[st.p].ec46_probs;
     const weeks = per.filter((p) => p.kind === 'week');

@@ -6,6 +6,11 @@
 
   const state = { issue: 'latest', product: '1m', var: 't2m', period: null, display: 'tercile', thr: null, side: 'high' };
   let manifest, latestManifest, archive, grid, renderer, map, overlay, gridLayer, tileLayer, selMarker;
+  let stationsData = null, stationLayer = null;
+  let fineGrid = null, fineRenderer = null;
+  const fineMaps = {};
+  const fineOn = () => fineRenderer && state.issue === 'latest' && $('fineChk').checked && !!fineField();
+  const stationMarkers = {};
   const maps = {};
   // 선택한 발표일의 자료 경로 (latest = 최신, 그 밖에는 data/archive/<날짜>/)
   const base = () => (state.issue === 'latest' ? K.DATA : `data/archive/${state.issue}/`);
@@ -36,6 +41,14 @@
     }
     buildIssueSelect();
     renderIssueInfo();
+    stationsData = await K.getJSON(K.DATA + 'stations.json').catch(() => null);
+    if (latestManifest.fine) {
+      fineGrid = await K.getJSON('data/grid_fine.json').catch(() => null);
+      if (fineGrid) {
+        const south = { type: 'FeatureCollection', features: korea.features.filter((f) => f.properties.name === 'South Korea') };
+        fineRenderer = new K.FieldRenderer(fineGrid, south);
+      }
+    }
 
     initMap(korea, neighbors);
     buildStaticControls();
@@ -159,6 +172,9 @@
       openPoint(la, lo);
     };
     $('gridChk').onchange = (e) => (e.target.checked ? gridLayer.addTo(map) : gridLayer.remove());
+    initStations();
+    $('fineBox').hidden = !fineRenderer;
+    $('fineChk').onchange = () => update();
     $('tileChk').onchange = (e) => {
       document.body.classList.toggle('tiles', e.target.checked);
       e.target.checked ? tileLayer.addTo(map) : tileLayer.remove();
@@ -273,7 +289,10 @@
     const period = P.periods.find((p) => p.id === state.period);
     const f = currentField();
     const sp = spec(f, period);
-    const canvas = renderer.render(sp.layers, sp.color, 560);
+    if (fineRenderer && !fineMaps[state.product]) {
+      fineMaps[state.product] = await K.getJSON(K.DATA + `map_fine_${state.product}.json`).catch(() => null);
+    }
+    const canvas = composite(f, period, 560);
     if (overlay) overlay.setUrl(canvas.toDataURL());
     else overlay = L.imageOverlay(canvas.toDataURL(), renderer.bounds, { pane: 'field', interactive: false, className: 'fieldimg' }).addTo(map);
     state.spec = sp;
@@ -289,8 +308,9 @@
       ? ` 단위: ${V.agg === 'sum' ? '기간 누적' : '기간 평균'} ${V.unit}.` : '');
     renderLegend(sp);
     renderThumbs();
+    renderStations();
     // 열려 있는 지점 창도 같은 전망·요소로 동기화
-    if (!$('pointWin').hidden && state.openIdx != null) setFrame(state.openIdx);
+    if (!$('pointWin').hidden && state.open) setFrame(state.open);
   }
 
   function renderLegend(sp) {
@@ -308,7 +328,8 @@
       return;
     }
     const s = sp.scale;
-    const lab = s.breaks.map((b) => (Math.abs(b) >= 100 || Number.isInteger(b) ? b : b.toFixed(b % 0.5 ? 2 : 1)));
+    // 0.25 같은 소수는 앞의 0을 빼서 눈금 글자가 겹치지 않게
+    const lab = s.breaks.map((b) => (Number.isInteger(b) ? b : String(b).replace(/^(-?)0\./, '$1.')));
     el.innerHTML = `<div class="slegend"><div class="bar">${s.colors.map((c) => `<span style="background:${c}"></span>`).join('')}</div>
       <div class="ticks">${lab.map((l) => `<span>${l}</span>`).join('')}</div><div class="unit">${sp.unit || ''}</div></div>`;
   }
@@ -320,7 +341,7 @@
     for (const p of P.periods) {
       const f = currentField(p.id);
       const sp = spec(f, p);
-      const c = renderer.render(sp.layers, sp.color, 150);
+      const c = composite(f, p, 150);
       renderer.outline(c);
       const card = document.createElement('button');
       card.type = 'button';
@@ -334,13 +355,39 @@
     }
   }
 
+  // ---------------------------------------------------------------- 남한 20 km 상세화 합성
+  function fineField(pid = state.period) {
+    const m = fineMaps[state.product];
+    return m && m.fields[state.var] ? m.fields[state.var][pid] : null;
+  }
+  // 0.5° 전체 그림 위에 남한 0.2° 상세화 그림을 같은 메르카토르 좌표로 겹친다
+  function composite(f, period, width) {
+    const sp = spec(f, period);
+    const canvas = renderer.render(sp.layers, sp.color, width);
+    const ff = fineField(period.id);
+    if (!fineOn() || !ff) return canvas;
+    const fsp = spec(ff, period);
+    const [W, H] = [canvas.width, canvas.height];
+    const [x0, y0] = renderer.toPixel(fineRenderer.north, fineRenderer.west, W, H);
+    const [x1, y1] = renderer.toPixel(fineRenderer.south, fineRenderer.east, W, H);
+    const fc = fineRenderer.render(fsp.layers, fsp.color, Math.max(20, Math.round(x1 - x0)));
+    canvas.getContext('2d').drawImage(fc, x0, y0, x1 - x0, y1 - y0);
+    return canvas;
+  }
+
   // ---------------------------------------------------------------- 마우스 값 표시
   function onHover(e) {
     const box = $('hoverBox');
     const { lat, lng } = e.latlng;
     if (!renderer || !state.spec || !renderer.isLand(lat, lng)) { box.hidden = true; return; }
-    const sp = state.spec;
-    const vals = sp.layers.map((l) => renderer.sample(renderer.nodes(l), lat, lng));
+    let sp = state.spec, rr = renderer, tag = '0.5° 격자';
+    if (fineOn() && fineRenderer.isLand(lat, lng)) {
+      const P0 = manifest.products[state.product];
+      sp = spec(fineField(), P0.periods.find((p) => p.id === state.period));
+      rr = fineRenderer;
+      tag = '20 km 상세화';
+    }
+    const vals = sp.layers.map((l) => rr.sample(rr.nodes(l), lat, lng));
     const V = manifest.variables[state.var];
     const P = K.POLES[state.var];
     let html;
@@ -350,7 +397,7 @@
       html = `<b>${K.fmt(vals[0], sp.unit === '%' ? 0 : K.VAR_META[state.var].fmt)}</b> ${sp.unit || ''}`;
     }
     const city = K.nearestCity(lat, lng);
-    box.innerHTML = `<div class="hl">${city ? city + ' 부근 · ' : ''}${lat.toFixed(2)}°N ${lng.toFixed(2)}°E</div>${html}<div class="hint">클릭: 지점 상세</div>`;
+    box.innerHTML = `<div class="hl">${city ? city + ' 부근 · ' : ''}${lat.toFixed(2)}°N ${lng.toFixed(2)}°E · ${tag}</div>${html}<div class="hint">클릭: 지점 상세</div>`;
     const pt = e.containerPoint;
     const W = map.getSize().x;
     box.style.left = Math.min(pt.x + 14, W - 210) + 'px';
@@ -358,17 +405,82 @@
     box.hidden = false;
   }
 
+  // ---------------------------------------------------------------- ASOS 지점 상세화
+  function initStations() {
+    const box = $('stnBox');
+    if (!stationsData || !stationsData.stations.length) { box.hidden = true; return; }
+    box.hidden = false;
+    $('stnCount').textContent = stationsData.stations.length;
+    stationLayer = L.layerGroup().addTo(map);
+    stationsData.stations.forEach((s, i) => {
+      const m = L.circleMarker([s.lat, s.lon], { pane: 'labels', radius: 6, weight: 2, className: 'stnpt', fillOpacity: 1 });
+      m.on('click', (e) => { L.DomEvent.stopPropagation(e); openStation(s); });
+      m.on('mouseover', () => m.setStyle({ radius: 8 }));
+      m.on('mouseout', () => m.setStyle({ radius: 6 }));
+      m.bindTooltip('', { direction: 'top', offset: [0, -6], className: 'stntip' });
+      stationMarkers[s.stn] = { m, i, s };
+      m.addTo(stationLayer);
+    });
+    $('stnChk').onchange = () => renderStations();
+  }
+
+  function renderStations() {
+    if (!stationLayer) return;
+    const pf = stationsData.products[state.product];
+    const sf = state.issue === 'latest' && pf && pf.fields[state.var] ? pf.fields[state.var][state.period] : null;
+    const show = !!sf && $('stnChk').checked;
+    document.body.classList.toggle('stn-on', show); // 지점 원과 겹치는 도시 점은 숨김
+    if (!show) { stationLayer.remove(); return; }
+    stationLayer.addTo(map);
+    const P = manifest.products[state.product];
+    const sp = spec(sf, P.periods.find((p) => p.id === state.period));
+    const V = manifest.variables[state.var];
+    for (const { m, i, s } of Object.values(stationMarkers)) {
+      const vals = sp.layers.map((l) => (l ? l[i] : null));
+      const col = vals.some((v) => v == null) ? null : sp.color(...vals);
+      m.setStyle({ fillColor: col || '#ffffff', fillOpacity: col ? 1 : 0.4 });
+      const txt = sp.legend === 'tercile'
+        ? `${K.POLES[state.var].lowName} ${vals[0] ?? '–'}% · 비슷 ${vals[1] ?? '–'}% · ${K.POLES[state.var].highName} ${vals[2] ?? '–'}%`
+        : `${vals[0] == null ? '관측 없음' : K.fmt(vals[0], sp.unit === '%' ? 0 : K.VAR_META[state.var].fmt) + ' ' + (sp.unit || '')}`;
+      m.setTooltipContent(`<b>ASOS ${s.name}</b> (${s.stn})<br>${txt}<br><span class="hint">관측 평년 기준 · 클릭: 지점 상세</span>`);
+    }
+  }
+
+  function openStation(s) {
+    state.open = { s: s.stn };
+    if (selMarker) selMarker.setLatLng([s.lat, s.lon]);
+    else selMarker = L.circleMarker([s.lat, s.lon], { pane: 'labels', radius: 9, className: 'selpt', interactive: false }).addTo(map);
+    $('pointWinTitle').textContent = `ASOS ${s.name}(${s.stn}) · 관측 평년 기준`;
+    setFrame(state.open);
+    showWin();
+  }
+
   // ---------------------------------------------------------------- 지점 창
   function openPoint(lat, lon) {
+    if (fineOn() && fineRenderer.isLand(lat, lon)) {
+      const fi = K.nearestPoint(fineGrid, lat, lon).index;
+      const [fa, fo] = fineGrid.points[fi];
+      state.open = { f: fi };
+      if (selMarker) selMarker.setLatLng([fa, fo]);
+      else selMarker = L.circleMarker([fa, fo], { pane: 'labels', radius: 7, className: 'selpt', interactive: false }).addTo(map);
+      const c = K.nearestCity(fa, fo);
+      $('pointWinTitle').textContent = `${c ? c + ' · ' : ''}20 km 상세화 격자 ${fa.toFixed(1)}°N ${fo.toFixed(1)}°E`;
+      setFrame(state.open);
+      showWin();
+      return;
+    }
     const { index } = K.nearestPoint(grid, lat, lon);
-    state.openIdx = index;
+    state.open = { i: index };
     const [la, lo] = grid.points[index];
     if (selMarker) selMarker.setLatLng([la, lo]);
     else selMarker = L.circleMarker([la, lo], { pane: 'labels', radius: 7, className: 'selpt', interactive: false }).addTo(map);
     const city = K.nearestCity(la, lo);
     $('pointWinTitle').textContent = `${city ? city + ' · ' : ''}격자 ${la.toFixed(1)}°N ${lo.toFixed(1)}°E` +
       (state.issue === 'latest' ? '' : ' (지점 상세는 최신 발표 기준)');
-    setFrame(index);
+    setFrame(state.open);
+    showWin();
+  }
+  function showWin() {
     const w = $('pointWin');
     if (w.hidden) {
       w.hidden = false;
@@ -378,8 +490,9 @@
       }
     }
   }
-  function setFrame(i) {
-    const src = `point.html?i=${i}&p=${state.product}&v=${state.var}&period=${state.period}&embed=1`;
+  function setFrame(o) {
+    const target = o.s != null ? `s=${o.s}` : o.f != null ? `f=${o.f}` : `i=${o.i}`;
+    const src = `point.html?${target}&p=${state.product}&v=${state.var}&period=${state.period}&embed=1`;
     const fr = $('pointFrame');
     if (fr.getAttribute('src') !== src) fr.setAttribute('src', src);
   }

@@ -150,3 +150,31 @@ def seasonal(points, key, issue, forecast_days, daily_vars, weekly, monthly, nme
             r["monthly"] = mo
         out.append(r)
     return out
+
+
+# 데모용 ASOS 지점 (실제 지점 위치, 값은 합성)
+DEMO_STATIONS = [
+    (90, "속초", 38.251, 128.565, 18), (100, "대관령", 37.677, 128.718, 772), (101, "춘천", 37.903, 127.736, 76),
+    (105, "강릉", 37.751, 128.891, 27), (108, "서울", 37.571, 126.966, 86), (112, "인천", 37.478, 126.625, 69),
+    (115, "울릉도", 37.481, 130.899, 221), (119, "수원", 37.257, 126.983, 40), (131, "청주", 36.639, 127.441, 59),
+    (133, "대전", 36.372, 127.372, 68), (136, "안동", 36.573, 128.707, 141), (138, "포항", 36.032, 129.380, 4),
+    (143, "대구", 35.878, 128.653, 54), (146, "전주", 35.841, 127.117, 60), (152, "울산", 35.582, 129.335, 81),
+    (156, "광주", 35.173, 126.892, 70), (159, "부산", 35.105, 129.032, 70), (165, "목포", 34.817, 126.382, 45),
+    (168, "여수", 34.739, 127.741, 66), (184, "제주", 33.514, 126.530, 21), (189, "서귀포", 33.246, 126.565, 52),
+]
+
+
+def asos():
+    pts = [[la, lo] for _, _, la, lo, _ in DEMO_STATIONS]
+    ndays = (dt.date(CLIM_YEARS[1], 12, 31) - DAY0).days + 1
+    dates = [DAY0 + dt.timedelta(days=i) for i in range(ndays)]
+    doy = np.array([d.timetuple().tm_yday for d in dates], dtype=float)
+    data = {}
+    for k, V in VARIABLES.items():
+        base = np.array([_normal(V["era5"], la, lo, doy) for la, lo in pts])
+        if k == "t2m":  # 고도 보정(기온감률 0.6°C/100m)
+            base = base - 0.006 * np.array([h for *_, h in DEMO_STATIONS])[:, None]
+        noise, mode = _daily_noise(V["era5"], ndays, (len(pts),))
+        data[k] = base + noise if mode == "add" else base * noise
+    meta = [{"stn": s, "name": n, "lat": la, "lon": lo, "ht": h, "missing": []} for s, n, la, lo, h in DEMO_STATIONS]
+    return Climatology(pts, dates, data), meta

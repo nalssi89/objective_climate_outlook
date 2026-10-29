@@ -4,7 +4,7 @@ name: ASOS 관측 평년 구축
 on:
   workflow_dispatch:
   push:
-    paths: ["pipeline/asos.py", "pipeline/kma.py", ".github/workflows/asos.yml"]
+    paths: ["pipeline/asos.py", "pipeline/kma.py", "pipeline/fine_grid.py", ".github/workflows/asos.yml"]
 
 permissions:
   contents: write
@@ -27,11 +27,13 @@ jobs:
         run: python pipeline/asos.py || echo "미완료 - 다시 실행하면 이어받음"
         env:
           KMA_APIHUB_KEY: ${{ secrets.KMA_APIHUB_KEY }}
+      - name: 20 km 상세화 격자 고도(최초 1회)
+        run: python pipeline/fine_grid.py elev
       - name: 요약
         run: python pipeline/asos.py --info | head -120
       - name: 캐시 커밋
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pipeline/cache/asos_daily.npz || true
+          git add pipeline/cache/asos_daily.npz site/data/grid_fine.json || true
           git diff --cached --quiet || (git commit -m "ASOS 관측 평년 캐시 갱신" && git pull --rebase -q && git push)

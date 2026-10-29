@@ -122,6 +122,47 @@ def pct(x):
 
 
 # ---------------------------------------------------------------- 핵심 산출
+def period_fields(X, clim_mean, B, V, kind, src=None):
+    """멤버 값 X[지점, 멤버], 평년값, 평년 분포 경계 B[지점, 5] → 지도 필드 dict 와 표용 분위수."""
+    ens = np.nanmean(X, axis=1)
+    ok = np.isfinite(X)
+    cnt = np.maximum(ok.sum(axis=1), 1)
+
+    def prob(mask):
+        p = (mask & ok).sum(axis=1) / cnt
+        return np.where(ok.any(axis=1), p, np.nan)
+
+    below = prob(X < B[:, [1]])
+    above = prob(X > B[:, [3]])
+    near = 1 - below - above
+    f = {
+        "mean": r2(ens), "clim": r2(clim_mean),
+        "anom": r2(ens - clim_mean),
+        "spread": r2(np.nanstd(X, axis=1)),
+        "below": pct(below), "near": pct(near), "above": pct(above),
+        "gt_median": pct(prob(X > B[:, [2]])),
+        "lt_p10": pct(prob(X < B[:, [0]])), "gt_p90": pct(prob(X > B[:, [4]])),
+        "p10": r2(np.nanpercentile(X, 10, axis=1)), "p90": r2(np.nanpercentile(X, 90, axis=1)),
+        "clim_src": [str(x) for x in (src if src is not None else ["obs"] * len(ens))],
+    }
+    if V["mode"] == "mul":
+        with np.errstate(invalid="ignore", divide="ignore"):
+            f["anom_pct"] = r2(100 * ens / clim_mean, 0)
+    thr = {}
+    T = V["thresholds"]
+    for t in T.get("anom", []):
+        k = f"anom_{'gt' if t > 0 else 'lt'}{t:+g}"
+        thr[k] = pct(prob(X - clim_mean[:, None] > t) if t > 0 else prob(X - clim_mean[:, None] < t))
+    for t in T.get("ratio", []):
+        lim = clim_mean[:, None] * t / 100
+        thr[f"ratio_{'gt' if t > 100 else 'lt'}{t}"] = pct(prob(X > lim) if t > 100 else prob(X < lim))
+    for t in T.get("abs", {}).get(kind, []):
+        thr[f"abs_gt{t}"] = pct(prob(X > t))
+    f["thr"] = thr
+    table = {"q": [r2(np.nanpercentile(X, q, axis=1)) for q in PCTS], "b": [r2(B[:, j]) for j in range(5)]}
+    return f, table
+
+
 def monthly_clim_rates(resp, dates, D, V):
     """SEAS5 월별 평균·편차로 역산한 월별 모델 기후값의 '일 단위' 값 {YYYY-MM: (지점,)}.
 
@@ -157,7 +198,7 @@ def compute_product(key, resp, points, clim, issue, clim_rates=None):
     if not periods:
         raise RuntimeError(f"{key}: 예측기간을 구성할 수 없음 (일수 {len(dates)})")
     block = "weekly" if key == "1m" else "monthly"
-    fields, tables, members_out, daily_out, rates_out = {}, {}, {}, {}, {}
+    fields, tables, members_out, daily_out, rates_out, clim_raw = {}, {}, {}, {}, {}, {}
     pts = np.asarray(points)
     n = len(points)
 
@@ -234,45 +275,9 @@ def compute_product(key, resp, points, clim, issue, clim_rates=None):
             B = np.sort(B, axis=1)
 
             # ---- 3) 확률 (멤버 계수)
-            ok = np.isfinite(X)
-            cnt = np.maximum(ok.sum(axis=1), 1)
-
-            def prob(mask):
-                return (mask & ok).sum(axis=1) / cnt
-
-            below = prob(X < B[:, [1]])
-            above = prob(X > B[:, [3]])
-            near = 1 - below - above
-            f = {
-                "mean": r2(ens), "clim": r2(clim_mean),
-                "anom": r2(ens - clim_mean),
-                "spread": r2(np.nanstd(X, axis=1)),
-                "below": pct(below), "near": pct(near), "above": pct(above),
-                "gt_median": pct(prob(X > B[:, [2]])),
-                "lt_p10": pct(prob(X < B[:, [0]])), "gt_p90": pct(prob(X > B[:, [4]])),
-                "p10": r2(np.nanpercentile(X, 10, axis=1)), "p90": r2(np.nanpercentile(X, 90, axis=1)),
-                "clim_src": ["model" if s == "model" else "era5" for s in src],
-            }
-            if V["mode"] == "mul":
-                with np.errstate(invalid="ignore", divide="ignore"):
-                    f["anom_pct"] = r2(100 * ens / clim_mean, 0)
-            thr = {}
-            T = V["thresholds"]
-            for t in T.get("anom", []):
-                k = f"anom_{'gt' if t > 0 else 'lt'}{t:+g}"
-                thr[k] = pct(prob(X - clim_mean[:, None] > t) if t > 0 else prob(X - clim_mean[:, None] < t))
-            for t in T.get("ratio", []):
-                lim = clim_mean[:, None] * t / 100
-                thr[f"ratio_{'gt' if t > 100 else 'lt'}{t}"] = pct(prob(X > lim) if t > 100 else prob(X < lim))
-            for t in T.get("abs", {}).get(kind, []):
-                thr[f"abs_gt{t}"] = pct(prob(X > t))
-            f["thr"] = thr
+            f, tables[vk][p["id"]] = period_fields(X, clim_mean, B, V, kind, src)
             fields[vk][p["id"]] = f
-
-            tables[vk][p["id"]] = {
-                "q": [r2(np.nanpercentile(X, q, axis=1)) for q in PCTS],
-                "b": [r2(B[:, j]) for j in range(5)],
-            }
+            clim_raw.setdefault(vk, {})[p["id"]] = clim_mean
             if "parts" not in p:
                 A, a = api_period_values(resp, block, prefix, p)
                 tables[vk][p["id"]]["api_mean"], tables[vk][p["id"]]["api_anom"] = r2(A), r2(a)
@@ -316,10 +321,113 @@ def compute_product(key, resp, points, clim, issue, clim_rates=None):
             ec_probs.append(row)
 
     return {
-        "key": key, "periods": periods, "dates": dates[: periods[-1]["i1"] + 1], "fields": fields, "rates": rates_out,
+        "key": key, "periods": periods, "dates": dates[: periods[-1]["i1"] + 1], "fields": fields, "rates": rates_out, "clim_raw": clim_raw,
         "tables": tables, "members": members_out, "daily": daily_out, "ec_probs": ec_probs,
         "nmem": {vk: int(np.max(np.isfinite(m[periods[0]["id"]]).sum(axis=1))) for vk, m in members_out.items()},
     }
+
+
+# ---------------------------------------------------------------- ASOS 지점 상세화
+def idw_weights(src_pts, dst_pts, k=4, power=2):
+    """격자점 → 지점 역거리가중 가중치 행렬 W[지점, 격자]."""
+    src, dst = np.asarray(src_pts, float), np.asarray(dst_pts, float)
+    coslat = np.cos(np.radians(dst[:, :1]))
+    d2 = (dst[:, None, 0] - src[None, :, 0]) ** 2 + ((dst[:, None, 1] - src[None, :, 1]) * coslat) ** 2
+    W = np.zeros((len(dst), len(src)))
+    for i in range(len(dst)):
+        nn = np.argsort(d2[i])[:k]
+        w = 1.0 / np.maximum(d2[i, nn], 1e-6) ** (power / 2)
+        W[i, nn] = w / w.sum()
+    return W
+
+
+def wapply(W, A):
+    """결측을 건너뛰는 가중 평균: W[지점, 격자] · A[격자, ...]."""
+    A = np.asarray(A, float)
+    ok = np.isfinite(A)
+    num = np.tensordot(W, np.where(ok, A, 0.0), axes=(1, 0))
+    den = np.tensordot(W, ok.astype(float), axes=(1, 0))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(den > 0.5, num / den, np.nan)
+
+
+LAPSE = 0.0065  # 기온감률 °C/m (지점 평년을 해면 기준으로 바꿔 보간한 뒤 격자 고도로 되돌림)
+
+
+class InterpClim:
+    """ASOS 관측 평년을 상세 격자로 보간: 기온은 고도 보정, 나머지는 역거리가중."""
+
+    def __init__(self, sclim, smeta, pts, elev):
+        self.sclim = sclim
+        self.points = np.asarray(pts, float)
+        self.st_ht = np.array([m["ht"] for m in smeta], float)
+        self.elev = np.asarray(elev if elev is not None else np.zeros(len(pts)), float)
+
+    def _interp(self, vk, v):
+        if vk == "t2m":
+            return self.sclim.idw(v + LAPSE * self.st_ht.reshape((-1,) + (1,) * (v.ndim - 1)), self.points) \
+                - LAPSE * self.elev.reshape((-1,) + (1,) * (v.ndim - 1))
+        return self.sclim.idw(v, self.points)
+
+    def stats(self, vk, start, end, agg, mode):
+        st = self.sclim.stats(vk, start, end, agg, mode)
+        if st is None:
+            return None
+        return self._interp(vk, st[0]), self.sclim.idw(st[1], self.points)
+
+    def daily_normal(self, vk, dates):
+        n = self.sclim.daily_normal(vk, dates)
+        return None if n is None else self._interp(vk, n)
+
+
+def compute_stations(R, points, sclim, smeta):
+    """모델 멤버의 평년편차(기온)·평년비(그 외)를 지점으로 보간해 ASOS 관측 평년 분포에 적용."""
+    W = idw_weights(points, sclim.points)
+    ns = len(sclim.points)
+    out = {"periods": R["periods"], "dates": R["dates"], "fields": {}, "tables": {}, "members": {}, "daily": {},
+           "ec_probs": None, "nmem": R["nmem"]}
+    if R["ec_probs"] is not None:  # EC46 직접 산출 확률은 가장 가까운 격자점 값
+        out["ec_probs"] = [R["ec_probs"][int(np.argmax(W[i]))] for i in range(ns)]
+    for vk, per in R["members"].items():
+        V = VARIABLES[vk]
+        out["fields"][vk], out["tables"][vk], out["members"][vk] = {}, {}, {}
+        last = R["periods"][-1]
+        for p in R["periods"]:
+            X, cm = per[p["id"]], R["clim_raw"][vk][p["id"]]
+            st = sclim.stats(vk, p["start"], p["end"], V["agg"], V["mode"])
+            if st is None:
+                continue
+            obs_mean, shape = st
+            if V["mode"] == "add":
+                Y = obs_mean[:, None] + wapply(W, X - cm[:, None])
+                B = obs_mean[:, None] + shape
+            else:
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    ratio = X / cm[:, None]
+                Y = obs_mean[:, None] * wapply(W, ratio)
+                B = obs_mean[:, None] * shape
+            B = np.sort(B, axis=1)
+            f, t = period_fields(Y, obs_mean, B, V, p["kind"], ["obs"] * ns)
+            out["fields"][vk][p["id"]], out["tables"][vk][p["id"]], out["members"][vk][p["id"]] = f, t, Y
+        # 일별 분포: 전체 기간의 '관측 평년 − 모델 평년' 차이(기온) 또는 비(그 외)로 보정
+        dd = R["daily"][vk]
+        st = sclim.stats(vk, last["start"], last["end"], V["agg"], V["mode"])
+        cm_st = wapply(W, R["clim_raw"][vk][last["id"]])
+        if V["agg"] == "sum":
+            ndays = (last["end"] - last["start"]).days + 1
+            obs, mod = st[0] / ndays, cm_st / ndays
+        else:
+            obs, mod = st[0], cm_st
+        conv = (lambda a: wapply(W, a) + (obs - mod)[:, None]) if V["mode"] == "add" else \
+               (lambda a: wapply(W, a) * (obs / mod)[:, None])
+        e = {"q": np.array([conv(q) for q in dd["q"]]), "mean": conv(dd["mean"])}
+        if "cq" in dd:
+            e["cq"] = np.array([conv(q) for q in dd["cq"]])
+            e["cmean"] = conv(dd["cmean"])
+        norm = sclim.daily_normal(vk, R["dates"])
+        e["normal"] = norm
+        out["daily"][vk] = e
+    return out
 
 
 # ---------------------------------------------------------------- 저장
@@ -328,7 +436,37 @@ def period_meta(periods):
              "end": p["end"].isoformat()} for p in periods]
 
 
-def write_outputs(products, points, demo, clim):
+def point_record(R, i):
+    """산출물 R 의 i 번째 지점(격자점 또는 ASOS 지점) 상세 자료."""
+    pr = {"dates": [d.isoformat() for d in R["dates"]], "daily": {}, "periods": {}}
+    for vk, dd in R["daily"].items():
+        e = {"min": r2(dd["q"][0][i]), "p10": r2(dd["q"][1][i]), "p25": r2(dd["q"][2][i]),
+             "p50": r2(dd["q"][3][i]), "p75": r2(dd["q"][4][i]), "p90": r2(dd["q"][5][i]),
+             "max": r2(dd["q"][6][i]), "mean": r2(dd["mean"][i])}
+        if "cq" in dd:
+            e["cum"] = {f"p{p}": r2(dd["cq"][j][i], 1) for j, p in enumerate([10, 25, 50, 75, 90])}
+            e["cum"]["mean"] = r2(dd["cmean"][i], 1)
+        if dd.get("normal") is not None:
+            e["normal"] = r2(dd["normal"][i])
+        pr["daily"][vk] = e
+    for vk, per in R["fields"].items():
+        pr["periods"][vk] = {}
+        for pid, f in per.items():
+            t = R["tables"][vk][pid]
+            row = {k: (f[k][i] if isinstance(f[k], list) else f[k]) for k in f if k != "thr"}
+            row["thr"] = {k: v[i] for k, v in f["thr"].items()}
+            row["q"] = [x[i] for x in t["q"]]
+            row["bounds"] = [x[i] for x in t["b"]]
+            if "api_mean" in t:
+                row["api_mean"], row["api_anom"] = t["api_mean"][i], t["api_anom"][i]
+            row["members"] = r2(R["members"][vk][pid][i], 2 if vk == "t2m" else 1)
+            pr["periods"][vk][pid] = row
+    if R["ec_probs"] is not None:
+        pr["ec46_probs"] = R["ec_probs"][i]
+    return pr
+
+
+def write_outputs(products, points, demo, clim, stations=None, fine=None):
     tmp = OUT.parent / "latest.tmp"
     if tmp.exists():
         shutil.rmtree(tmp)
@@ -354,33 +492,39 @@ def write_outputs(products, points, demo, clim):
     for i, (la, lo) in enumerate(points):
         out = {"lat": la, "lon": lo}
         for key, R in products.items():
-            pr = {"dates": [d.isoformat() for d in R["dates"]], "daily": {}, "periods": {}}
-            for vk, dd in R["daily"].items():
-                e = {"min": r2(dd["q"][0][i]), "p10": r2(dd["q"][1][i]), "p25": r2(dd["q"][2][i]),
-                     "p50": r2(dd["q"][3][i]), "p75": r2(dd["q"][4][i]), "p90": r2(dd["q"][5][i]),
-                     "max": r2(dd["q"][6][i]), "mean": r2(dd["mean"][i])}
-                if "cq" in dd:
-                    e["cum"] = {f"p{p}": r2(dd["cq"][j][i], 1) for j, p in enumerate([10, 25, 50, 75, 90])}
-                    e["cum"]["mean"] = r2(dd["cmean"][i], 1)
-                if dd.get("normal") is not None:
-                    e["normal"] = r2(dd["normal"][i])
-                pr["daily"][vk] = e
-            for vk, per in R["fields"].items():
-                pr["periods"][vk] = {}
-                for pid, f in per.items():
-                    t = R["tables"][vk][pid]
-                    row = {k: (f[k][i] if isinstance(f[k], list) else f[k]) for k in f if k != "thr"}
-                    row["thr"] = {k: v[i] for k, v in f["thr"].items()}
-                    row["q"] = [x[i] for x in t["q"]]
-                    row["bounds"] = [x[i] for x in t["b"]]
-                    if "api_mean" in t:
-                        row["api_mean"], row["api_anom"] = t["api_mean"][i], t["api_anom"][i]
-                    row["members"] = r2(R["members"][vk][pid][i], 2 if vk == "t2m" else 1)
-                    pr["periods"][vk][pid] = row
-            if R["ec_probs"] is not None:
-                pr["ec46_probs"] = R["ec_probs"][i]
-            out[key] = pr
+            out[key] = point_record(R, i)
         json.dump(out, open(tmp / "points" / f"{i}.json", "w"), ensure_ascii=False, separators=(",", ":"))
+
+    if stations:
+        (tmp / "stations").mkdir()
+        smeta, sprod = stations
+        index = {"source": "기상청 ASOS 1991–2020 관측 평년", "stations": [
+            {k: m[k] for k in ("stn", "name", "lat", "lon", "ht", "missing")} for m in smeta], "products": {}}
+        for key, S in sprod.items():
+            index["products"][key] = {"fields": S["fields"]}
+        json.dump(index, open(tmp / "stations.json", "w"), ensure_ascii=False, separators=(",", ":"))
+        for i, m in enumerate(smeta):
+            out = {"lat": m["lat"], "lon": m["lon"], "stn": m["stn"], "name": m["name"], "ht": m["ht"],
+                   "kind": "station", "missing": m["missing"]}
+            for key, S in sprod.items():
+                out[key] = point_record(S, i)
+            json.dump(out, open(tmp / "stations" / f"{m['stn']}.json", "w"), ensure_ascii=False, separators=(",", ":"))
+        manifest["stations"] = len(smeta)
+
+    if fine:
+        fg, fprod = fine
+        (tmp / "fine").mkdir()
+        for key, F in fprod.items():
+            json.dump({"key": key, "periods": period_meta(F["periods"]), "fields": F["fields"]},
+                      open(tmp / f"map_fine_{key}.json", "w"), ensure_ascii=False, separators=(",", ":"))
+        elev = fg.get("elev") or [None] * len(fg["points"])
+        for i, (la, lo) in enumerate(fg["points"]):
+            out = {"kind": "fine", "lat": la, "lon": lo, "ht": elev[i]}
+            for key, F in fprod.items():
+                out[key] = point_record(F, i)
+            json.dump(out, open(tmp / "fine" / f"{i}.json", "w"), ensure_ascii=False, separators=(",", ":"))
+        manifest["fine"] = {"step": fg["step"], "cells": len(fg["points"]), "elev": bool(fg.get("elev")),
+                            "source": "ASOS 관측 평년 보간(기온 고도 보정)"}
 
     json.dump(manifest, open(tmp / "manifest.json", "w"), ensure_ascii=False, indent=1)
     if OUT.exists():
@@ -428,7 +572,25 @@ def main():
             resp = om.fetch_seasonal(points, P["model"], daily_vars, weekly, monthly, P["forecast_days"])
         rates = products["3m"]["rates"] if "3m" in products else None
         products[key] = compute_product(key, resp, points, clim, issue, rates)
-    write_outputs(products, points, args.demo, clim)
+    stations = None
+    if args.demo:
+        sclim, smeta = synthetic.asos()
+    else:
+        import asos
+        sclim, smeta = asos.load()
+    if sclim is not None:
+        print(f"[stations] ASOS {len(smeta)}개 지점 상세화")
+        stations = (smeta, {k: compute_stations(R, points, sclim, smeta) for k, R in products.items()})
+    fine = None
+    fg_path = ROOT / "site" / "data" / "grid_fine.json"
+    if sclim is not None and fg_path.exists():
+        fg = json.load(open(fg_path))
+        if not fg.get("elev"):
+            print("! 상세 격자 고도 없음(fine_grid.py elev 필요) -> 고도 0 m 로 가정")
+        iclim = InterpClim(sclim, smeta, fg["points"], fg.get("elev"))
+        print(f"[fine] 남한 {len(fg['points'])}개 0.2° 격자 상세화")
+        fine = (fg, {k: compute_stations(R, points, iclim, None) for k, R in products.items()})
+    write_outputs(products, points, args.demo, clim, stations, fine)
 
 
 if __name__ == "__main__":

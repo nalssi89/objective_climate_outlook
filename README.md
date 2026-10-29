@@ -46,6 +46,12 @@ python -m http.server -d site 8000  # http://localhost:8000
 저장소에 들어 있는 `site/data/latest/`는 **DEMO(합성) 자료**입니다. 실제 전망은 GitHub Actions가 매일 만들어
 `gh-pages` 브랜치에 웹사이트째 올립니다. 저장소 **Settings → (왼쪽 메뉴) Pages → Build and deployment → Source: Deploy from a branch → Branch: `gh-pages` / `(root)` → Save** 로 설정하면 `https://nalssi89.github.io/objective_climate_outlook/` 에서 열립니다.
 
+## 지역 상세화 (기상청 ASOS)
+
+- **ASOS 지점 상세화:** 1991–2020 관측 자료가 충분한(기온 90% 이상) ASOS 지점마다 30년 관측 평년 분포를 만든다. 주변 모델 격자의 멤버별 평년편차(기온)·평년비(강수·일사·풍속)를 지점으로 보간해 그 분포에 적용한다. 지도에는 지점 원으로 표시되고, 클릭하면 지점 상세 창이 열린다.
+- **남한 20 km(0.2°) 상세화:** 지점 관측 평년과 분포를 271개 격자로 보간한다(기온은 기온감률 6.5 °C/km로 고도 보정, 격자 평균 고도는 Open-Meteo Elevation 25표본). 같은 방식으로 모델 신호를 적용한다. 북한은 0.5° 모델 격자를 유지한다.
+- 수집: `KMA_APIHUB_KEY`(저장소 Secret) → `python pipeline/asos.py`(이어받기) · `python pipeline/fine_grid.py elev`. GitHub Actions 「ASOS 관측 평년 구축」이 수행한다.
+
 ## 자동 갱신
 
 - **매일 07:10 KST**(22:10 UTC) GitHub Actions가 최신 EC46·SEAS5를 받아 다시 산출·게시합니다. 12:10 KST에 한 번 더 돌려 아침 실행이 실패해도 그날 안에 갱신됩니다.
