@@ -11,12 +11,9 @@ BASE = "https://apihub.kma.go.kr/api/typ01/url/"
 KEY = os.environ.get("KMA_APIHUB_KEY")
 
 PROBES = [
-    ("ASOS 일자료 도움말", "kma_sfcdd.php", {"tm": "20150715", "stn": "0", "help": "1"}),
-    ("ASOS 일자료 1개 지점(서울 108)", "kma_sfcdd.php", {"tm": "20150715", "stn": "108", "help": "0"}),
-    ("ASOS 일자료 기간(서울, 10일)", "kma_sfcdd3.php", {"tm1": "20150701", "tm2": "20150710", "stn": "108", "help": "1"}),
-    ("일 평년값", "sfc_norm1.php", {"norm": "D", "tmst": "2021", "stn": "0", "MM1": "5", "DD1": "1", "MM2": "5", "DD2": "2", "help": "1"}),
-    ("지점 정보", "stn_inf.php", {"inf": "SFC", "stn": "", "tm": "202410290900", "help": "1"}),
-    ("ASOS 일자료 CSV(disp=0, 서울·강릉)", "kma_sfcdd.php", {"tm": "19910115", "stn": "108:105", "disp": "0", "help": "0"}),
+    ("월 평년값(서울, 1–12월)", "sfc_norm1.php", {"norm": "M", "tmst": "2021", "stn": "108", "MM1": "1", "MM2": "12", "help": "1"}),
+    ("월 평년값(전체, 11월)", "sfc_norm1.php", {"norm": "M", "tmst": "2021", "stn": "0", "MM1": "11", "MM2": "11", "help": "0"}),
+    ("월 평년값(대구 860, 전주 864)", "sfc_norm1.php", {"norm": "M", "tmst": "2021", "stn": "860:864:143:146", "MM1": "11", "MM2": "11", "help": "0"}),
 ]
 
 
@@ -53,4 +50,3 @@ def parsed_sample():
 
 if __name__ == "__main__":
     main()
-    parsed_sample()
