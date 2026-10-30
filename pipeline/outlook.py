@@ -40,9 +40,6 @@ def define_periods(key, dates, weekly_block, issue):
         for k, s in enumerate(starts[:4]):
             e = s + dt.timedelta(days=6)
             periods.append({"id": f"w{k + 1}", "kind": "week", "label": f"{k + 1}주", "start": s, "end": e})
-        if len(periods) == 4:
-            periods.append({"id": "m1", "kind": "month", "label": "1개월(1–4주)", "start": periods[0]["start"],
-                            "end": periods[-1]["end"], "parts": [p["id"] for p in periods]})
     else:
         y, m = (issue.year, issue.month) if issue.day == 1 else _add_month(issue.year, issue.month, 1)
         for k in range(3):
@@ -51,9 +48,6 @@ def define_periods(key, dates, weekly_block, issue):
             e = dt.date(*_add_month(yy, mm, 1), 1) - dt.timedelta(days=1)
             if s in d2i and e in d2i:
                 periods.append({"id": f"m{k + 1}", "kind": "month", "label": f"{mm}월", "start": s, "end": e})
-        if len(periods) == 3:
-            periods.append({"id": "s", "kind": "season", "label": "3개월(" + "·".join(p["label"][:-1] for p in periods) + "월)",
-                            "start": periods[0]["start"], "end": periods[-1]["end"], "parts": [p["id"] for p in periods]})
     for p in periods:
         p["i0"], p["i1"] = d2i[p["start"]], d2i[p["end"]]
     return periods
@@ -206,7 +200,6 @@ def compute_product(key, resp, points, clim, issue, clim_rates=None):
         nmem = D.shape[1]
         prefix = V["weekly"] if key == "1m" else V["monthly"]
         fields[vk], tables[vk], members_out[vk] = {}, {}, {}
-        base_clim = {}
         if key == "3m" and V["monthly"]:
             rates_out[vk] = monthly_clim_rates(resp, dates, D, V)
         rates = (clim_rates or {}).get(vk, {})
@@ -220,14 +213,7 @@ def compute_product(key, resp, points, clim, issue, clim_rates=None):
             era = clim.stats(vk, p["start"], p["end"], V["agg"], V["mode"]) if clim else None
             era_mean = clim.idw(era[0], pts) if era else np.full(n, np.nan)
             src = np.array(["era5"] * n, dtype=object)
-            if "parts" in p:
-                parts = [base_clim[q] for q in p["parts"]]
-                w = np.array([(next(x for x in periods if x["id"] == q)["i1"] - next(x for x in periods if x["id"] == q)["i0"] + 1)
-                              for q in p["parts"]], dtype=float)
-                stack = np.array([c[0] for c in parts])
-                cm = stack.sum(axis=0) if V["agg"] == "sum" else (stack * w[:, None]).sum(axis=0) / w.sum()
-                model_ok = np.all([c[1] == "model" for c in parts], axis=0)
-            elif key == "1m" and V["mode"] == "mul":
+            if key == "1m" and V["mode"] == "mul":
                 # EC46 주별 강수·풍속 평균은 일별 멤버 집계와 정의가 달라 비율 역산이 불안정 →
                 # 같은 IFS 계열인 SEAS5 의 월별 모델 기후값(일 단위)을 주 기간에 합산/평균
                 # 월 중앙일 사이를 선형 보간해 월 안의 계절 변화를 반영(범위 밖은 가장 가까운 달 값)
@@ -254,7 +240,6 @@ def compute_product(key, resp, points, clim, issue, clim_rates=None):
                 model_ok = np.isfinite(cm)
             clim_mean = np.where(model_ok, cm, era_mean)
             src[model_ok] = "model"
-            base_clim[p["id"]] = (clim_mean, src)
 
             # ---- 2) 평년 분포 형태 → 3분위·10/90% 경계
             if era is not None:
@@ -274,9 +259,8 @@ def compute_product(key, resp, points, clim, issue, clim_rates=None):
             f, tables[vk][p["id"]] = period_fields(X, clim_mean, B, V, kind, src)
             fields[vk][p["id"]] = f
             clim_raw.setdefault(vk, {})[p["id"]] = clim_mean
-            if "parts" not in p:
-                A, a = api_period_values(resp, block, prefix, p)
-                tables[vk][p["id"]]["api_mean"], tables[vk][p["id"]]["api_anom"] = r2(A), r2(a)
+            A, a = api_period_values(resp, block, prefix, p)
+            tables[vk][p["id"]]["api_mean"], tables[vk][p["id"]]["api_anom"] = r2(A), r2(a)
             members_out[vk][p["id"]] = X
 
         # ---- 일별 앙상블 분포 (시계열)
@@ -471,17 +455,22 @@ def compute_stations(R, points, sclim, smeta):
             src = ["kma" if (off is not None and off[i]) else "obs" for i in range(ns)]
             f, t = period_fields(Y, obs_mean, B, V, p["kind"], src)
             out["fields"][vk][p["id"]], out["tables"][vk][p["id"]], out["members"][vk][p["id"]] = f, t, Y
-        # 일별 분포: 전체 기간의 '관측 평년 − 모델 평년' 차이(기온) 또는 비(그 외)로 보정
+        # 일별 분포: 각 예측 기간의 '관측 평년 − 모델 평년' 차이(기온) 또는 비(그 외)로 날짜별 보정
         dd = R["daily"][vk]
-        st = sclim.stats(vk, last["start"], last["end"], V["agg"], V["mode"])
-        cm_st = wapply(W, R["clim_raw"][vk][last["id"]])
-        if V["agg"] == "sum":
-            ndays = (last["end"] - last["start"]).days + 1
-            obs, mod = st[0] / ndays, cm_st / ndays
-        else:
+        nd = len(R["dates"])
+        offs = np.full((ns, nd), np.nan)
+        for p in R["periods"]:
+            st = sclim.stats(vk, p["start"], p["end"], V["agg"], V["mode"])
+            if st is None:
+                continue
+            cm_st = wapply(W, R["clim_raw"][vk][p["id"]])
             obs, mod = st[0], cm_st
-        conv = (lambda a: wapply(W, a) + (obs - mod)[:, None]) if V["mode"] == "add" else \
-               (lambda a: wapply(W, a) * (obs / mod)[:, None])
+            with np.errstate(invalid="ignore", divide="ignore"):
+                o = obs - mod if V["mode"] == "add" else obs / mod
+            offs[:, p["i0"]:p["i1"] + 1] = o[:, None]
+        first = R["periods"][0]["i0"]
+        offs[:, :first] = offs[:, [first]]  # 첫 기간 이전 날짜는 첫 기간 보정값
+        conv = (lambda a: wapply(W, a) + offs) if V["mode"] == "add" else (lambda a: wapply(W, a) * offs)
         e = {"q": np.array([conv(q) for q in dd["q"]]), "mean": conv(dd["mean"])}
         if "cq" in dd:
             e["cq"] = np.array([conv(q) for q in dd["cq"]])
