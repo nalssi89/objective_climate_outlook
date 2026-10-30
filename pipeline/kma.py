@@ -125,3 +125,29 @@ def stations(tm="202012310900"):
         except (IndexError, ValueError):
             continue
     return out
+
+
+def norm_monthly(stn="0", tmst="2021"):
+    """기상청 공식 월평년값 {지점: {월: {열: 값}}} (sfc_norm1.php, norm=M; tmst=2021 → 1991–2020)."""
+    text = get_text("sfc_norm1.php", {"norm": "M", "tmst": tmst, "stn": str(stn), "MM1": "1", "MM2": "12", "help": "0"})
+    cols = None
+    out = {}
+    for ln in text.splitlines():
+        s = ln.strip()
+        if s.startswith("#") and "STN" in s and "," in s:
+            cols = [c.strip() for c in s.lstrip("#").split(",") if c.strip() and c.strip() != "="]
+            continue
+        if not s or s.startswith("#") or cols is None:
+            continue
+        vals = [v.strip() for v in s.rstrip("=").rstrip(",").split(",")]
+        rec = dict(zip(cols, vals))
+        try:
+            st, mm = int(rec["STN"]), int(rec["MM"])
+        except (KeyError, ValueError):
+            continue
+        out.setdefault(st, {})[mm] = {k: to_float(v) for k, v in rec.items() if k not in ("ST", "STN", "MM", "DD")}
+        # -99.90 처럼 자리수가 다른 결측 표기도 결측 처리
+        for k, v in out[st][mm].items():
+            if v is not None and v <= -99:
+                out[st][mm][k] = np.nan
+    return out

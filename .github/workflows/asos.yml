@@ -35,7 +35,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pipeline/cache/asos_daily.npz site/data/grid_fine.json || true
+          git add pipeline/cache/asos_daily.npz pipeline/cache/kma_norm_monthly.json site/data/grid_fine.json || true
           git diff --cached --quiet && exit 0
           git commit -m "ASOS 관측 평년 캐시 갱신"
           # 그사이 다른 커밋이 올라왔으면 이 실행의 결과를 우선해 다시 얹는다

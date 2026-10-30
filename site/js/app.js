@@ -314,6 +314,7 @@
     renderLegend(sp);
     renderThumbs();
     renderStations();
+    renderKorea();
     // 열려 있는 지점 창도 같은 전망·요소로 동기화
     if (!$('pointWin').hidden && state.open) setFrame(state.open);
   }
@@ -449,6 +450,26 @@
         : `${vals[0] == null ? '관측 없음' : K.fmt(vals[0], sp.unit === '%' ? 0 : K.VAR_META[state.var].fmt) + ' ' + (sp.unit || '')}`;
       m.setTooltipContent(`<b>ASOS ${s.name}</b> (${s.stn})<br>${txt}<br><span class="hint">관측 평년 기준 · 클릭: 지점 상세</span>`);
     }
+  }
+
+  // 남한 평균(본토 62개 지점) 기상청 공식 월평년 범위 3분류 — 3개월 전망의 달력 월에만 있음
+  function renderKorea() {
+    const box = $('krAvg');
+    const k = stationsData && state.issue === 'latest' && stationsData.products[state.product]
+      ? (stationsData.products[state.product].korea || {})[state.period] : null;
+    if (!k || !Object.keys(k).length) { box.hidden = true; return; }
+    const P = manifest.products[state.product].periods.find((p) => p.id === state.period);
+    const row = (vk) => {
+      const r = k[vk];
+      if (!r) return '';
+      const V = manifest.variables[vk], C = K.POLES[vk], u = vk === 't2m' ? '°C' : 'mm';
+      const parts = [[r.below, C.low[2], C.lowName, '#fff'], [r.near, K.NEAR, '비슷', '#0b0b0b'], [r.above, C.high[2], C.highName, '#fff']];
+      return `<div class="krrow"><div class="krl"><b>${V.name}</b><small>평년 ${r.normal}${u} · 비슷 ${r.lower}–${r.upper}${u}</small></div>
+        <div class="krb">${parts.map(([v, c, n, ink]) => `<span style="flex:${Math.max(v, 0.5)};background:${c};color:${ink}" title="${n} ${v}%">${v >= 12 ? n + ' ' + v + '%' : ''}</span>`).join('')}</div>
+        <div class="krm">예측 평균 <b>${K.fmt(r.mean, vk === 't2m' ? 1 : 0)}${u}</b></div></div>`;
+    };
+    box.innerHTML = `<div class="krh"><b>남한 평균 ${P.label}</b> <span class="hint">본토 62개 지점 · 기상청 공식 1991–2020 월평년 범위 기준 3분류 확률</span></div>${row('t2m')}${row('precip')}`;
+    box.hidden = false;
   }
 
   function openStation(s) {

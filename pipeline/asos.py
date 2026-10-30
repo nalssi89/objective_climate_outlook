@@ -19,6 +19,8 @@ from climatology import DAY0, Climatology
 from config import ASOS_MERGE, ASOS_OFFICIAL_66, CLIM_YEARS
 
 CACHE = Path(__file__).resolve().parent / "cache" / "asos_daily.npz"
+OFFICIAL = Path(__file__).resolve().parent / "cache" / "kma_norm_monthly.json"
+OFFICIAL_COLS = {"t2m": "TA", "precip": "RN", "rad": "SI", "wind": "WS"}
 CHUNK_YEARS = 5
 # 전망 요소 ↔ ASOS 일자료 열
 COLUMNS = {"t2m": "TA_AVG", "precip": "RN_DAY", "rad": "SI_DAY", "wind": "WS_AVG"}
@@ -73,7 +75,35 @@ def build():
         _save(meta, data, done)
         return False
     merge(meta, data, done)
+    build_official()
     return bool(done.all())
+
+
+def build_official():
+    """기상청 공식 월평년값(1991–2020)을 지점별로 저장. 병합 지점(860·864)은 143·146 으로 연결."""
+    import kma
+
+    if OFFICIAL.exists():
+        return
+    norm = kma.norm_monthly("0")
+    alias = {r["source"]: r["station"] for r in ASOS_MERGE}
+    out = {}
+    for st, months in norm.items():
+        key = alias.get(st, st)
+        if key not in ASOS_OFFICIAL_66:
+            continue
+        out[str(key)] = {str(mm): {k: (None if not np.isfinite(rec.get(c, np.nan)) else rec[c])
+                                   for k, c in OFFICIAL_COLS.items()} for mm, rec in months.items()}
+    missing = sorted(set(ASOS_OFFICIAL_66) - {int(k) for k in out})
+    print(f"공식 월평년값: {len(out)}개 지점 (없음: {missing})")
+    json.dump(out, open(OFFICIAL, "w"), ensure_ascii=False, indent=0)
+
+
+def load_official():
+    """{지점: {월: {요소: 공식 월평년값}}} (없으면 None). 일사는 월합계(MJ/m²)."""
+    if not OFFICIAL.exists():
+        return None
+    return {int(k): {int(m): v for m, v in mv.items()} for k, mv in json.load(open(OFFICIAL)).items()}
 
 
 def merge(meta, data, done):

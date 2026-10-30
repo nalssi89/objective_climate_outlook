@@ -191,7 +191,7 @@
     const rows = [
       ['group', '값'],
       ['앙상블 평균', R.map((r) => f(r.mean))],
-      [isObs() ? '관측 평년값' : '모델 평년값', R.map((r) => f(r.clim) + (r.clim_src === 'era5' ? '<sup title="ERA5 평년값 사용(모델 편차 미보정)">E</sup>' : ''))],
+      [isObs() ? '관측 평년값' : '모델 평년값', R.map((r) => f(r.clim) + (r.clim_src === 'era5' ? '<sup title="ERA5 평년값 사용(모델 편차 미보정)">E</sup>' : r.clim_src === 'kma' ? '<sup title="기상청 공식 월평년값(1991–2020)">공식</sup>' : ''))],
       [V.mode === 'add' ? '평년편차' : '평년편차 (평년비)', R.map((r) => (r.anom > 0 ? '+' : '') + f(r.anom) + (V.mode === 'mul' ? ` (${f(r.anom_pct, 0)}%)` : ''))],
       ['앙상블 스프레드(σ)', R.map((r) => f(r.spread))],
       ['멤버 10%', R.map((r) => f(r.q[0]))],

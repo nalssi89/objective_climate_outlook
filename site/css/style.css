@@ -144,6 +144,17 @@ body.stn-on .city i { display: none; }
 .tlegend .lnote { display: flex; gap: 6px; align-items: center; margin-top: 3px; color: var(--muted); }
 .tlegend .lnote .sw { box-shadow: 0 0 0 1px var(--ring); }
 
+/* 남한 평균 공식 3분류 */
+.kravg { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+.krh { margin-bottom: 6px; }
+.krh .hint { display: inline; margin-left: 6px; }
+.krrow { display: grid; grid-template-columns: 210px minmax(0, 1fr) 140px; gap: 12px; align-items: center; padding: 4px 0; }
+.krl small { display: block; color: var(--muted); font-size: 11.5px; }
+.krb { display: flex; gap: 2px; height: 22px; }
+.krb span { display: grid; place-items: center; font-size: 11.5px; font-weight: 600; border-radius: 4px; white-space: nowrap; overflow: hidden; }
+.krm { font-size: 12.5px; color: var(--ink-2); text-align: right; }
+@media (max-width: 640px) { .krrow { grid-template-columns: 1fr; gap: 4px; } .krm { text-align: left; } }
+
 /* 기간 비교 */
 .strip { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px 12px; }
 .striphead { font-weight: 600; font-size: 13px; margin-bottom: 8px; }

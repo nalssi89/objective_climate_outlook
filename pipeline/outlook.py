@@ -19,7 +19,7 @@ import numpy as np
 
 import openmeteo as om
 from climatology import Climatology, default_shape
-from config import DEFAULT_SPREAD, EC46_WEEKLY_PROBS, PRODUCTS, VARIABLES
+from config import DEFAULT_SPREAD, EC46_WEEKLY_PROBS, KOREA_MAINLAND_62, KOREA_OFFICIAL_MONTHLY, PRODUCTS, VARIABLES
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "data" / "latest"
@@ -376,6 +376,70 @@ class InterpClim:
         return None if n is None else self._interp(vk, n)
 
 
+def is_calendar_month(p):
+    nxt = (p["start"].replace(day=28) + dt.timedelta(days=4)).replace(day=1)
+    return p["start"].day == 1 and p["end"] == nxt - dt.timedelta(days=1)
+
+
+class OfficialClim:
+    """달력 월(3개월 전망의 1·2·3개월)은 기상청 공식 월평년값(1991–2020)을 평년값으로 쓴다.
+
+    기온의 '비슷' 범위는 공식 방식대로 평년 ± 0.43σ(σ 는 30년 관측에서 계산), 강수 등은 관측 33–67 백분위.
+    """
+
+    COLS = {"t2m": "TA", "precip": "RN", "rad": "SI", "wind": "WS"}
+
+    def __init__(self, sclim, smeta, official):
+        self.sclim, self.points, self.idw, self.daily_normal = sclim, sclim.points, sclim.idw, sclim.daily_normal
+        self.ids = [m["stn"] for m in smeta]
+        self.official = official
+        self.last_official = None
+
+    def stats(self, vk, start, end, agg, mode):
+        st = self.sclim.stats(vk, start, end, agg, mode)
+        self.last_official = None
+        if st is None or not self.official or not is_calendar_month({"start": start, "end": end}):
+            return st
+        ndays = (end - start).days + 1
+        off = np.array([(self.official.get(i, {}).get(start.month, {}) or {}).get(vk) for i in self.ids], dtype=float)
+        if vk == "rad":
+            off = off / ndays  # 공식 일사는 월합계 → 일평균
+        mean, shape = st
+        ok = np.isfinite(off)
+        new = np.where(ok, off, mean)
+        if mode == "mul":  # 분포 경계(관측 33–67 백분위 등)의 절댓값은 유지
+            with np.errstate(invalid="ignore", divide="ignore"):
+                shape = shape * (mean / new)[:, None]
+        self.last_official = ok
+        return new, shape
+
+
+def korea_average(S, smeta):
+    """남한 본토 62개 지점 평균의 멤버 값을 기상청 공식 월평년 '비슷' 범위로 3분류 (달력 월만)."""
+    idx = [i for i, m in enumerate(smeta) if m["stn"] in KOREA_MAINLAND_62]
+    out = {}
+    for p in S["periods"]:
+        if not is_calendar_month(p):
+            continue
+        mm = p["start"].month - 1
+        res = {}
+        for vk, crit in KOREA_OFFICIAL_MONTHLY.items():
+            if vk not in S["members"] or p["id"] not in S["members"][vk]:
+                continue
+            Y = np.nanmean(S["members"][vk][p["id"]][idx], axis=0)  # (멤버,)
+            Y = Y[np.isfinite(Y)]
+            if vk == "t2m":
+                lo, hi = crit["normal"][mm] - crit["half"][mm], crit["normal"][mm] + crit["half"][mm]
+            else:
+                lo, hi = crit["lower"][mm], crit["upper"][mm]
+            below, above = float(np.mean(Y < lo)), float(np.mean(Y > hi))
+            res[vk] = {"normal": crit["normal"][mm], "lower": round(lo, 1), "upper": round(hi, 1),
+                       "mean": r2(float(np.mean(Y))), "below": round(100 * below), "above": round(100 * above),
+                       "near": 100 - round(100 * below) - round(100 * above), "n": int(len(Y))}
+        out[p["id"]] = res
+    return out
+
+
 def compute_stations(R, points, sclim, smeta):
     """모델 멤버의 평년편차(기온)·평년비(그 외)를 지점으로 보간해 ASOS 관측 평년 분포에 적용."""
     W = idw_weights(points, sclim.points)
@@ -403,7 +467,9 @@ def compute_stations(R, points, sclim, smeta):
                 Y = obs_mean[:, None] * wapply(W, ratio)
                 B = obs_mean[:, None] * shape
             B = np.sort(B, axis=1)
-            f, t = period_fields(Y, obs_mean, B, V, p["kind"], ["obs"] * ns)
+            off = getattr(sclim, "last_official", None)
+            src = ["kma" if (off is not None and off[i]) else "obs" for i in range(ns)]
+            f, t = period_fields(Y, obs_mean, B, V, p["kind"], src)
             out["fields"][vk][p["id"]], out["tables"][vk][p["id"]], out["members"][vk][p["id"]] = f, t, Y
         # 일별 분포: 전체 기간의 '관측 평년 − 모델 평년' 차이(기온) 또는 비(그 외)로 보정
         dd = R["daily"][vk]
@@ -497,7 +563,7 @@ def write_outputs(products, points, demo, clim, stations=None, fine=None):
         index = {"source": "기상청 ASOS 1991–2020 관측 평년", "stations": [
             {k: m[k] for k in ("stn", "name", "lat", "lon", "ht", "missing")} for m in smeta], "products": {}}
         for key, S in sprod.items():
-            index["products"][key] = {"fields": S["fields"]}
+            index["products"][key] = {"fields": S["fields"], "korea": korea_average(S, smeta)}
         json.dump(index, open(tmp / "stations.json", "w"), ensure_ascii=False, separators=(",", ":"))
         for i, m in enumerate(smeta):
             out = {"lat": m["lat"], "lon": m["lon"], "stn": m["stn"], "name": m["name"], "ht": m["ht"],
@@ -575,6 +641,10 @@ def main():
         import asos
         sclim, smeta = asos.load()
     if sclim is not None:
+        official = None if args.demo else asos.load_official()
+        if official:
+            sclim = OfficialClim(sclim, smeta, official)
+            print(f"[stations] 달력 월은 기상청 공식 월평년값 사용 ({len(official)}개 지점)")
         print(f"[stations] ASOS {len(smeta)}개 지점 상세화")
         stations = (smeta, {k: compute_stations(R, points, sclim, smeta) for k, R in products.items()})
     fine = None
