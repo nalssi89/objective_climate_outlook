@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from config import CLIM_CHUNK_YEARS, CLIM_POINTS, CLIM_YEARS, VARIABLES
+from config import CLIM_CHUNK_YEARS, CLIM_POINTS, CLIM_YEARS, TEMP_TERCILE_SIGMA, VARIABLES
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(__file__).resolve().parent / "cache" / "era5_daily.npz"
@@ -77,7 +77,10 @@ class Climatology:
         mean = np.nanmean(v, axis=1)
         q = np.nanpercentile(v, QUANTILES, axis=1).T  # (n, 5)
         if mode == "add":
-            shape = q - mean[:, None]
+            # 기상청 방식: 평년 ± 0.43σ(표본표준편차)를 '비슷' 범위로, 10/90%는 정규분포 ±1.2816σ
+            sd = np.nanstd(v, axis=1, ddof=1)
+            k = np.array([-1.2816, -TEMP_TERCILE_SIGMA, 0.0, TEMP_TERCILE_SIGMA, 1.2816])
+            shape = sd[:, None] * k[None, :]
         else:
             with np.errstate(invalid="ignore", divide="ignore"):
                 shape = q / mean[:, None]

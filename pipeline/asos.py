@@ -2,7 +2,7 @@
 
 - 기상청 API 허브(kma_sfcdd3.php)에서 ASOS 지점별 일자료를 5년 단위로 받아 `cache/asos_daily.npz` 에 저장
   (이어받기 지원, 호출이 실패하면 진행분을 저장하고 종료 → 다시 실행).
-- 30년 중 기온 자료가 90% 이상인 지점만 '평년 지점'으로 사용한다.
+- 기상청 공식 평년 지점 66곳(본토 62 + 제주 4)을 쓰고, 대구·전주는 공식 병합 지점(860·864) 자료로 2015년 이후를 대체한다.
 
     python pipeline/asos.py          # 수집/이어받기 (KMA_APIHUB_KEY 필요)
     python pipeline/asos.py --info   # 캐시 요약
@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from climatology import DAY0, Climatology
-from config import CLIM_YEARS
+from config import ASOS_MERGE, ASOS_OFFICIAL_66, CLIM_YEARS
 
 CACHE = Path(__file__).resolve().parent / "cache" / "asos_daily.npz"
 CHUNK_YEARS = 5
@@ -45,6 +45,7 @@ def build():
         z = np.load(CACHE)
         old = json.loads(str(z["meta"]))
         if [m["stn"] for m in old] == [m["stn"] for m in meta]:
+            meta = old
             done = z["done"]
             data = {k: z["var_" + k].copy() for k in COLUMNS}
     print(f"ASOS: {len(meta)} stations x {len(ch)} chunks, done {int(done.sum())}/{done.size}")
@@ -71,7 +72,43 @@ def build():
         print(f"! 수집 중단: {e} -> 진행분 저장, 다시 실행하면 이어받음")
         _save(meta, data, done)
         return False
+    merge(meta, data, done)
     return bool(done.all())
+
+
+def merge(meta, data, done):
+    """공식 병합 지점: 전환일 이후를 병합 원천 지점(860·864) 자료로 대체. 자료가 없으면 원래 지점 유지."""
+    import kma
+
+    ids = [m["stn"] for m in meta]
+    for rule in ASOS_MERGE:
+        if rule["station"] not in ids:
+            continue
+        i = ids.index(rule["station"])
+        if meta[i].get("merged") == rule["source"]:
+            continue
+        start = dt.date.fromisoformat(rule["from"])
+        recs = []
+        for y0 in range(start.year, CLIM_YEARS[1] + 1, 3):
+            y1 = min(y0 + 2, CLIM_YEARS[1])
+            t1 = start.strftime("%Y%m%d") if y0 == start.year else f"{y0}0101"
+            recs += kma.sfcdd_range(rule["source"], t1, f"{y1}1231")
+            time.sleep(0.4)
+        if len(recs) < 365:
+            print(f"  ! 병합 원천 {rule['source']} 자료 부족({len(recs)}일) -> {rule['station']} 원자료 유지")
+            continue
+        j0 = (start - DAY0).days
+        for k in COLUMNS:
+            data[k][i, j0:] = np.nan
+        for r in recs:
+            j = (dt.date(int(r["TM"][:4]), int(r["TM"][4:6]), int(r["TM"][6:8])) - DAY0).days
+            if j0 <= j < ndays():
+                for k, col in COLUMNS.items():
+                    data[k][i, j] = kma.element_value(r, col)
+        meta[i]["merged"] = rule["source"]
+        meta[i]["name"] = rule["name"]
+        print(f"  병합: {rule['station']} ← {rule['source']} ({rule['from']}~, {len(recs)}일)")
+        _save(meta, data, done)
 
 
 def _save(meta, data, done):
@@ -89,7 +126,7 @@ def load():
         return None, None
     meta = json.loads(str(z["meta"]))
     data = {k: z["var_" + k] for k in COLUMNS}
-    keep = np.isfinite(data["t2m"]).mean(axis=1) >= MIN_COVER["t2m"]
+    keep = np.array([m["stn"] in ASOS_OFFICIAL_66 for m in meta])  # 기상청 공식 평년 지점 66곳
     meta = [m for m, k in zip(meta, keep) if k]
     data = {k: v[keep].astype(float) for k, v in data.items()}
     # 자료율이 낮은 요소는 지점별로 통째로 결측 처리(예: 일사 미관측 지점)
@@ -112,7 +149,9 @@ if __name__ == "__main__":
         c, meta = load()
         print("stations:", None if meta is None else len(meta))
         if meta:
+            print("missing official:", sorted(set(ASOS_OFFICIAL_66) - {m["stn"] for m in meta}))
+        if meta:
             for m in meta:
-                print(m["stn"], m["name"], m["lat"], m["lon"], m["ht"], "missing:", m["missing"])
+                print(m["stn"], m["name"], m["lat"], m["lon"], m["ht"], "merged:", m.get("merged"), "missing:", m["missing"])
     else:
         raise SystemExit(0 if build() else 3)
