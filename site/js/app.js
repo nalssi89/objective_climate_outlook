@@ -84,7 +84,12 @@
     else if (!latestManifest.demo && ageH > 30) html += ` <span class="badge warn" title="정기 갱신이 늦어지고 있습니다">갱신 지연 ${Math.floor(ageH)}시간</span>`;
     $('issue').innerHTML = html;
     $('demoRibbon').hidden = !manifest.demo;
-    $('updateHint').textContent = `1개월(EC46)은 매일, 3개월(SEAS5)은 매월 5일 모델이 갱신됩니다. 다음 정기 갱신 ${nu.m}/${nu.d} 07:10 KST.`;
+    // 가장 최근 정기 갱신 시각(07:10 KST)보다 발표가 오래됐으면 '반영 대기'로 안내
+    const lastRun = new Date(nextUpdate().getTime() - 86400e3);
+    const pending = !latestManifest.demo && latest < lastRun;
+    $('updateHint').textContent = '1개월(EC46)은 매일, 3개월(SEAS5)은 매월 5일 모델이 갱신됩니다. ' + (pending
+      ? `오늘 07:10 정기 갱신이 아직 반영되지 않았습니다(예약 실행 지연 시 08:40·12:10에 다시 시도).`
+      : `다음 정기 갱신 ${nu.m}/${nu.d} 07:10 KST.`);
   }
 
   function buildIssueSelect() {
