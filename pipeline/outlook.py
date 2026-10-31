@@ -484,7 +484,10 @@ def compute_stations(R, points, sclim, smeta):
             cum_adj[:, first:] = np.nancumsum(m_adj[:, first:], axis=1)
             with np.errstate(invalid="ignore", divide="ignore"):
                 eff = np.where(cum_raw > 1e-6, cum_adj / cum_raw, offs if V["mode"] == "mul" else 1.0)
-            e["cq"] = np.array([wapply(W, q) * eff for q in dd["cq"]])
+            cq = np.array([wapply(W, q) * eff for q in dd["cq"]])
+            # 근사 보정으로 생길 수 있는 작은 감소를 없앰(누적은 줄어들 수 없음)
+            cq[:, :, first:] = np.fmax.accumulate(np.nan_to_num(cq[:, :, first:], nan=0.0), axis=2)
+            e["cq"] = cq
             e["cmean"] = cum_adj
         norm = sclim.daily_normal(vk, R["dates"])
         e["normal"] = norm
