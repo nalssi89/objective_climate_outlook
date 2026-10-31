@@ -1,0 +1,168 @@
+{
+ "issued": "2026-10-31T15:36+09:00",
+ "demo": false,
+ "climatology": "ERA5 1991–2020 (Open-Meteo archive)",
+ "variables": {
+  "t2m": {
+   "name": "평균기온",
+   "unit": "°C",
+   "agg": "mean",
+   "mode": "add",
+   "thresholds": {
+    "anom": [
+     -2,
+     -1,
+     1,
+     2
+    ]
+   }
+  },
+  "precip": {
+   "name": "강수량",
+   "unit": "mm",
+   "agg": "sum",
+   "mode": "mul",
+   "thresholds": {
+    "ratio": [
+     50,
+     150,
+     200
+    ],
+    "abs": {
+     "week": [
+      10,
+      30,
+      50,
+      100
+     ],
+     "month": [
+      50,
+      100,
+      200,
+      300
+     ],
+     "season": [
+      100,
+      300,
+      500,
+      800
+     ]
+    }
+   }
+  },
+  "rad": {
+   "name": "일사량",
+   "unit": "MJ/m²/일",
+   "agg": "mean",
+   "mode": "mul",
+   "thresholds": {
+    "ratio": [
+     80,
+     90,
+     110,
+     120
+    ]
+   }
+  },
+  "wind": {
+   "name": "풍속",
+   "unit": "m/s",
+   "agg": "mean",
+   "mode": "mul",
+   "thresholds": {
+    "ratio": [
+     80,
+     90,
+     110,
+     120
+    ]
+   }
+  }
+ },
+ "products": {
+  "1m": {
+   "name": "1개월 전망",
+   "model": "ECMWF EC46 (51 멤버)",
+   "periods": [
+    {
+     "id": "w1",
+     "kind": "week",
+     "label": "1주",
+     "start": "2026-11-09",
+     "end": "2026-11-15"
+    },
+    {
+     "id": "w2",
+     "kind": "week",
+     "label": "2주",
+     "start": "2026-11-16",
+     "end": "2026-11-22"
+    },
+    {
+     "id": "w3",
+     "kind": "week",
+     "label": "3주",
+     "start": "2026-11-23",
+     "end": "2026-11-29"
+    },
+    {
+     "id": "w4",
+     "kind": "week",
+     "label": "4주",
+     "start": "2026-11-30",
+     "end": "2026-12-06"
+    }
+   ],
+   "start": "2026-10-31",
+   "end": "2026-12-06",
+   "members": {
+    "t2m": 51,
+    "precip": 51,
+    "rad": 51,
+    "wind": 51
+   }
+  },
+  "3m": {
+   "name": "3개월 전망",
+   "model": "ECMWF SEAS5 (51 멤버)",
+   "periods": [
+    {
+     "id": "m1",
+     "kind": "month",
+     "label": "11월",
+     "start": "2026-11-01",
+     "end": "2026-11-30"
+    },
+    {
+     "id": "m2",
+     "kind": "month",
+     "label": "12월",
+     "start": "2026-12-01",
+     "end": "2026-12-31"
+    },
+    {
+     "id": "m3",
+     "kind": "month",
+     "label": "1월",
+     "start": "2027-01-01",
+     "end": "2027-01-31"
+    }
+   ],
+   "start": "2026-10-31",
+   "end": "2027-01-31",
+   "members": {
+    "t2m": 51,
+    "precip": 51,
+    "rad": 51,
+    "wind": 51
+   }
+  }
+ },
+ "stations": 66,
+ "fine": {
+  "step": 0.2,
+  "cells": 271,
+  "elev": true,
+  "source": "ASOS 관측 평년 보간(기온 고도 보정)"
+ }
+}

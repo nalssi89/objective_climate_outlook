@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>서비스 설계·방법</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/about.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1>한반도 객관기후예측</h1>
+        <p class="sub">1개월 · 3개월 확률 기후전망</p>
+      </div>
+    </div>
+    <nav class="links">
+      <a href="index.html">전망 지도</a>
+      <a href="about.html" aria-current="page">서비스 설계·방법</a>
+    </nav>
+  </header>
+
+  <main class="doc">
+    <nav class="toc" aria-label="목차">
+      <a href="#goal">1. 목표</a>
+      <a href="#ref">2. 참조 서비스</a>
+      <a href="#data">3. 입력 자료</a>
+      <a href="#method">4. 산출 방법</a>
+      <a href="#downscale">4-1. 지역 상세화</a>
+      <a href="#products">5. 산출물</a>
+      <a href="#system">6. 시스템 구성</a>
+      <a href="#limits">7. 한계·향후 계획</a>
+    </nav>
+
+    <article>
+      <section id="goal">
+        <h2>1. 목표</h2>
+        <p>전 지구 앙상블 기후예측 모델의 원자료를 한반도 육상 0.5° 격자(118개 지점)에서 가공하여,
+          <b>1개월(주별 1–4주)</b>과 <b>3개월(월별 1·2·3개월)</b> 전망을 사람의 주관 없이 일관된 절차로 산출·표출한다.
+          모든 결과는 결정론적 값이 아니라 <b>확률</b>로 제공한다.</p>
+        <ul class="ticks">
+          <li>요소: 평균기온, 강수량, 일사량(단파복사), 10 m 풍속</li>
+          <li>표출: 3분위 확률, 평년(중앙값) 초과확률, 앙상블 평균, 평년편차, 임계값별 발생확률, 극한(상·하위 10%) 확률, 앙상블 스프레드</li>
+          <li>지도에서 지점을 클릭하면 별도 창에 시계열(앙상블 분포), 기간별 멤버 분포, 통계표(CSV)를 표출</li>
+        </ul>
+      </section>
+
+      <section id="ref">
+        <h2>2. 참조 서비스 분석</h2>
+        <div class="tablewrap">
+          <table class="doc-table">
+            <thead><tr><th>항목</th><th>호주기상청 (BoM) Climate outlooks</th><th>독일기상청 (DWD) 주·월·계절 예측</th><th>본 서비스 적용</th></tr></thead>
+            <tbody>
+              <tr><th>모델</th><td>ACCESS-S 앙상블 (자체 결합 모델)</td><td>GCFS (독일 결합 모델), ECMWF 등 다중 모델 참고</td><td>ECMWF EC46(46일, 매일) · SEAS5(7개월, 매월) 51 멤버</td></tr>
+              <tr><th>기간 구성</th><td>주별·2주·월·3개월 전망</td><td>주별(1–4주) 편차, 월·계절 전망</td><td>1개월: 1·2·3·4주 / 3개월: 1·2·3개월</td></tr>
+              <tr><th>핵심 확률 표현</th><td>“중앙값 초과 확률”, 매우 높음/낮음(상·하위 분위) 확률, 강수량 임계값 초과확률</td><td>평년편차 지도, 3분위(낮음/평년/높음) 확률</td><td>3분위 우세범주, 중앙값 초과확률, 상·하위 10% 확률, 임계값 초과확률, 평년편차를 모두 제공</td></tr>
+              <tr><th>기준 기후</th><td>모델 재예측(hindcast) 기후</td><td>모델 재예측 기후 대비 편차</td><td>ECMWF 모델 기후값(편차 역산) + ERA5 1991–2020 분포 형태</td></tr>
+              <tr><th>상호작용</th><td>지도 확대·지점 조회</td><td>지역별 도표</td><td>지도 마우스 값 표시, 지점 클릭 시 별도 창(새 브라우저 창 분리 가능)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">두 기관 모두 결정론적 값 대신 확률을 전면에 두고, 평년 대비 편차/범주를 모델 자체 기후(재예측)를 기준으로 계산해 모델의 계통오차를 줄인다. 본 서비스는 이 원칙을 공개 자료(Open-Meteo)로 구현했다.</p>
+      </section>
+
+      <section id="data">
+        <h2>3. 입력 자료</h2>
+        <div class="tablewrap">
+          <table class="doc-table">
+            <thead><tr><th>자료</th><th>용도</th><th>해상도·멤버</th><th>갱신</th><th>API</th></tr></thead>
+            <tbody>
+              <tr><th>ECMWF EC46</th><td>1개월 전망 (일별 멤버, 주별 평균·편차, 주별 편차확률·EFI)</td><td>36 km, 51 멤버(주별 산출물은 100 멤버)</td><td>매일 20:30 UTC</td><td><code>seasonal-api.open-meteo.com/v1/seasonal?models=ecmwf_ec46</code></td></tr>
+              <tr><th>ECMWF SEAS5</th><td>3개월 전망 (일별 멤버, 월별 평균·편차)</td><td>36 km, 51 멤버</td><td>매월 5일</td><td><code>…/v1/seasonal?models=ecmwf_seas5</code></td></tr>
+              <tr><th>ERA5 재분석</th><td>평년 분포 형태(분위수), 일평년값</td><td>권역 대표 12개 지점, 1991–2020 일별</td><td>최초 1회</td><td><code>archive-api.open-meteo.com/v1/archive</code></td></tr>
+              <tr><th>Natural Earth</th><td>육상 마스크·경계</td><td>1:10m</td><td>고정</td><td>world-atlas</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>요청 변수 (일별, 멤버별): <code>temperature_2m_mean</code>, <code>precipitation_sum</code>, <code>shortwave_radiation_sum</code>, <code>wind_speed_10m_mean</code>.
+          주별(EC46): <code>temperature_2m_mean/anomaly</code>, <code>precipitation_mean/anomaly</code>, <code>wind_speed_10m_mean/anomaly</code>, <code>temperature_2m_anomaly_gt0…</code>, <code>precipitation_efi</code> 등.
+          월별(SEAS5): 위 요소와 <code>shortwave_radiation_mean/anomaly</code>.</p>
+      </section>
+
+      <section id="method">
+        <h2>4. 산출 방법</h2>
+        <ol class="steps">
+          <li><b>기간 집계</b> — 멤버별 일별값을 예측 기간(주·월·계절)으로 집계한다. 강수는 누적, 기온·일사·풍속은 평균.
+            1개월 전망의 주는 월요일 시작–일요일 끝이며, 1주는 발표일 다음 주 월요일의 그다음 주부터다(예: 10/29(목) 발표 → 1주 11/9–11/15, 4주 11/30–12/6).</li>
+          <li><b>모델 평년값</b> — ECMWF가 재예측으로 계산한 주/월 편차 <i>a</i>와 평균 <i>A</i>를 이용해 모델 기후값을 역산한다.
+            <div class="formula">기온(가법): 평년 = 앙상블평균 − a &nbsp;&nbsp;|&nbsp;&nbsp; 강수·일사·풍속(승법): 평년 = 앙상블평균 × (A − a) / A</div>
+            승법 방식은 API의 월별 단위(일평균/월합계)와 무관하게 성립한다.
+            1개월 전망의 강수·일사·풍속은 EC46 주별 평균의 정의(멤버 수·집계 방식)가 일별 멤버 집계와 달라 비율 역산이 불안정하므로,
+            같은 IFS 계열인 SEAS5의 월별 모델 기후값을 일 단위로 환산하고 월 중앙일 사이를 선형 보간(월 안의 계절 변화 반영)하여 주 기간에 합산(강수)·평균(일사·풍속)한다. 기온은 EC46 주별 편차를 그대로 쓴다.
+            모델 기후값을 구할 수 없으면 ERA5 평년값을 사용하고 표에 <sup>E</sup>로 표시한다.</li>
+          <li><b>평년 분포</b> — ERA5 1991–2020의 같은 달력기간 30년 집계값으로 10·33.3·50·66.7·90% 분위수를 구하고,
+            기온은 <i>분위수 − 평균</i>, 나머지는 <i>분위수 / 평균</i> 형태로 바꿔 모델 평년값에 적용한다(대표 지점 → 격자 역거리가중 보간).
+            ERA5 캐시가 없으면 정규(기온)·로그정규(그 외) 분포와 기본 변동폭을 가정한다.</li>
+          <li><b>확률</b> — 51개 멤버 중 조건을 만족하는 멤버의 비율.
+            <div class="formula">P(낮음) = #(X &lt; 하위 1/3 경계)/N, &nbsp; P(높음) = #(X &gt; 상위 1/3 경계)/N, &nbsp; P(비슷) = 1 − P(낮음) − P(높음)</div>
+            중앙값 초과, 상·하위 10%, 임계값(기온 편차 ±1·±2 °C, 강수 평년비 50/150/200 %와 누적 강수량, 일사·풍속 평년비 80/90/110/120 %)도 같은 방식.</li>
+          <li><b>지도 표출</b> — 육상 격자값을 쌍선형 보간하여 메르카토르 이미지로 만들고 한반도 해안선으로 잘라 표출한다.
+            3분위 지도는 세 확률을 각각 보간한 뒤 화소마다 우세 범주를 정한다(최대 확률 40% 미만은 ‘불확실’).</li>
+        </ol>
+      </section>
+
+      <section id="downscale">
+        <h2>4-1. 지역 상세화 (기상청 ASOS)</h2>
+        <ul class="ticks">
+          <li><b>지점 상세화</b>: 기상청 공식 평년 지점 66곳(남한 본토 대표 62곳 + 제주 4곳)의 1991–2020 관측을 쓴다. 대구·전주는 공식 평년과 같이 병합 지점(860 신암, 864 완산) 자료로 2015년 이전 자료를 이어 붙인다. 30년 같은 달력기간 집계로 평년값을 계산하고, 평년 범위는 기상청 방식대로 기온은 평년 ± 0.43σ(표본표준편차), 강수·일사·풍속은 33–67 백분위로 정한다. 주변 0.5° 모델 격자의 멤버별 평년편차(기온) 또는 평년비(강수·일사·풍속)를 역거리가중으로 지점에 보간해 관측 평년에 적용한다. 그러면 관측 기준의 51개 멤버 값이 되고, 3분위·임계값 확률을 관측 분포로 계산한다.</li>
+          <li><b>남한 20 km(0.2°) 격자</b>: 지점 평년(기온은 6.5 °C/km 기온감률로 해면 기준 변환)과 분포 형태를 271개 격자로 보간한 뒤 격자 평균 고도로 되돌린다. 모델 신호 적용은 지점과 같다. 지도에서는 남한은 상세화 값, 북한은 0.5° 모델 값을 합쳐 보여 준다.</li>
+          <li><b>달력 월은 기상청 공식 범위</b>: 3개월 전망의 1·2·3개월은 지점 평년값으로 기상청 공식 월평년값(1991–2020)을 쓴다. 지도 위 카드에는 남한 본토 62개 지점 평균의 멤버 값을 기상청 공식 월평년 '비슷' 범위로 −/0/+ 3분류한 확률을 따로 보여 준다(기온: 평년 ± 0.43σ, 강수: 33–67 백분위). 1개월 전망의 1–4주는 공식 범위표가 없어 30년 관측으로 같은 방식을 적용한다.</li>
+          <li>한계: ASOS 평균 간격(약 40 km)보다 작은 규모의 지형 효과는 고도 보정 외에는 담지 못한다. 일사는 관측 지점이 적어 보간 오차가 크다.</li>
+        </ul>
+      </section>
+
+      <section id="products">
+        <h2>5. 산출물</h2>
+        <div class="grid2">
+          <div class="box">
+            <h3>지도 (전망 지도)</h3>
+            <ul class="ticks">
+              <li>전망 종류 × 요소 × 기간 × 표출항목 조합</li>
+              <li>마우스 위치의 보간값 실시간 표시</li>
+              <li>기간별 비교(소형 다중 지도)로 시간 변화 파악</li>
+              <li>주요 도시 바로가기, 분석 격자점 표시</li>
+              <li>주소창 해시(#product=…)로 화면 공유</li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3>지점 상세 창</h3>
+            <ul class="ticks">
+              <li>기간별 3분위 확률 막대 + 중앙값 초과확률</li>
+              <li>일별 앙상블 시계열(최소–최대, 10–90%, 25–75%, 중앙값, ERA5 일평년값), 강수 누적 그래프</li>
+              <li>기간별 51개 멤버 분포와 평년 범주 경계</li>
+              <li>통계표: 평균·평년·편차·스프레드·분위수·범주확률·임계값별 확률, EC46 직접 산출 확률·EFI</li>
+              <li>CSV 내려받기, 새 브라우저 창 분리</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="system">
+        <h2>6. 시스템 구성</h2>
+        <figure class="diagram" aria-label="자료 흐름도">
+          <svg viewBox="0 0 860 210" role="img">
+            <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" class="arrowhead"/></marker></defs>
+            <g class="node"><rect x="10" y="20" width="190" height="66" rx="10"/><text x="105" y="47">Open-Meteo Seasonal</text><text x="105" y="67" class="s">EC46 · SEAS5 51 멤버</text></g>
+            <g class="node"><rect x="10" y="120" width="190" height="66" rx="10"/><text x="105" y="147">Open-Meteo Archive</text><text x="105" y="167" class="s">ERA5 1991–2020</text></g>
+            <g class="node strong"><rect x="270" y="60" width="220" height="86" rx="10"/><text x="380" y="88">pipeline/outlook.py</text><text x="380" y="108" class="s">집계 · 모델 평년 · 확률</text><text x="380" y="126" class="s">GitHub Actions (매일 07:10 KST)</text></g>
+            <g class="node"><rect x="560" y="60" width="130" height="86" rx="10"/><text x="625" y="92">정적 JSON</text><text x="625" y="112" class="s">map_1m/3m</text><text x="625" y="128" class="s">points/*.json</text></g>
+            <g class="node"><rect x="740" y="60" width="110" height="86" rx="10"/><text x="795" y="92">웹 (Pages)</text><text x="795" y="112" class="s">Leaflet 지도</text><text x="795" y="128" class="s">지점 창</text></g>
+            <path d="M200 53 C235 53 235 90 268 90" class="edge" marker-end="url(#ar)"/>
+            <path d="M200 153 C235 153 235 118 268 118" class="edge" marker-end="url(#ar)"/>
+            <path d="M490 103 L558 103" class="edge" marker-end="url(#ar)"/>
+            <path d="M690 103 L738 103" class="edge" marker-end="url(#ar)"/>
+          </svg>
+        </figure>
+        <p>서버 없이 동작하는 정적 사이트다. 계산은 모두 배치(파이썬)에서 하고, 브라우저는 산출된 JSON만 읽는다.
+          매일 산출된 자료와 웹사이트는 <code>gh-pages</code> 브랜치(단일 커밋)에 게시되어 GitHub Pages로 서비스된다.
+          정기 실행은 매일 07:10 KST(예비 12:10 KST)이며, 지도 자료는 45일간 날짜별로 보관되어 화면의 ‘발표일’ 목록에서 지난 발표를 다시 볼 수 있다.</p>
+        <pre class="code">pip install -r pipeline/requirements.txt
+python pipeline/climatology.py     # ERA5 평년 캐시 (최초 1회, 이어받기)
+python pipeline/outlook.py         # 전망 산출 → site/data/latest/
+python -m http.server -d site 8000 # http://localhost:8000</pre>
+      </section>
+
+      <section id="limits">
+        <h2>7. 한계와 향후 계획</h2>
+        <ul class="ticks">
+          <li><b>보정 미적용</b>: 평균 편의는 모델 기후로 제거하지만 앙상블 퍼짐(신뢰도) 보정은 하지 않았다. 재예측 자료 확보 시 분위수 사상·EMOS 보정 도입.</li>
+          <li><b>검증</b>: 과거 예측(재예측)에 대한 RPSS·ROC·신뢰도 도표를 산출해 지도에 예측성(skill) 마스크를 겹치는 것이 다음 단계(BoM의 ‘past accuracy’ 지도에 해당).</li>
+          <li><b>해상도</b>: 36 km 모델 · 0.5° 격자로 산악·해안 효과가 약하다. ASOS 지점 기반 통계적 상세화 계획.</li>
+          <li><b>다중 모델</b>: C3S 다중모델(UKMO, Météo-France, DWD, NCEP 등) 결합 시 확률 신뢰도가 향상된다.</li>
+          <li>Open-Meteo 무료 API는 비상업용이며 호출량 제한이 있다. 운영 시 상용 키 또는 ECMWF/C3S 원자료 직접 수집 권장.</li>
+        </ul>
+      </section>
+    </article>
+  </main>
+  <footer class="foot">자료: ECMWF (EC46, SEAS5, ERA5) via Open-Meteo · Natural Earth. Contains modified Copernicus/ECMWF data.</footer>
+  <script>
+    try { const t = localStorage.getItem('kco-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* 무시 */ }
+  </script>
+</body>
+</html>
