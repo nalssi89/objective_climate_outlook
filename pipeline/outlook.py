@@ -473,8 +473,19 @@ def compute_stations(R, points, sclim, smeta):
         conv = (lambda a: wapply(W, a) + offs) if V["mode"] == "add" else (lambda a: wapply(W, a) * offs)
         e = {"q": np.array([conv(q) for q in dd["q"]]), "mean": conv(dd["mean"])}
         if "cq" in dd:
-            e["cq"] = np.array([conv(q) for q in dd["cq"]])
-            e["cmean"] = conv(dd["cmean"])
+            # 누적은 날짜별로 보정한 일값을 더해 가야 연속이 된다(누적값에 월별 비율을 곱하면 월 경계에서 꺾임).
+            # 누적 평균은 정확히, 누적 분위수는 '그날까지의 누적 가중 보정비'를 곱해 근사한다.
+            m_raw = wapply(W, dd["mean"])
+            m_adj = m_raw + offs if V["mode"] == "add" else m_raw * offs
+            first = R["periods"][0]["i0"]
+            cum_raw = np.full_like(m_raw, np.nan)
+            cum_adj = np.full_like(m_raw, np.nan)
+            cum_raw[:, first:] = np.nancumsum(m_raw[:, first:], axis=1)
+            cum_adj[:, first:] = np.nancumsum(m_adj[:, first:], axis=1)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                eff = np.where(cum_raw > 1e-6, cum_adj / cum_raw, offs if V["mode"] == "mul" else 1.0)
+            e["cq"] = np.array([wapply(W, q) * eff for q in dd["cq"]])
+            e["cmean"] = cum_adj
         norm = sclim.daily_normal(vk, R["dates"])
         e["normal"] = norm
         out["daily"][vk] = e
