@@ -19,20 +19,29 @@ ECMWF **EC46**(1개월)·**SEAS5**(3개월) 51개 앙상블 멤버를 [Open-Mete
 
 ```
 pipeline/
-  config.py        격자·요소·임계값·모델 설정
-  build_geo.py     육상 격자(grid.json)와 경계 GeoJSON 생성 (최초 1회, 결과 커밋됨)
+  config.py        격자·요소·임계값·모델·공식 지점/평년 기준 설정
+  build_geo.py     0.5° 육상 격자(grid.json)와 경계 GeoJSON 생성 (최초 1회, 결과 커밋됨)
+  fine_grid.py     남한 0.2° 상세 격자(grid_fine.json)와 격자 평균 고도 (최초 1회, 결과 커밋됨)
   openmeteo.py     Open-Meteo API 클라이언트 (다지점 요청, 재시도, 멤버 파싱)
-  climatology.py   ERA5 1991–2020 평년 분포 (캐시 구축·기간별 분위수·IDW 보간)
-  outlook.py       전망 산출 → site/data/latest/
+  climatology.py   ERA5 1991–2020 평년 분포 (캐시 구축·기간별 분포·IDW 보간)
+  kma.py           기상청 API 허브 클라이언트 (ASOS 일자료, 지점 정보, 공식 월평년값)
+  asos.py          ASOS 공식 66개 지점 1991–2020 관측 평년 캐시 구축·적재
+  outlook.py       전망 산출(격자·지점·20 km 상세화) → site/data/latest/
+  archive.py       매일 발표분 지도 자료 45일 보관
   synthetic.py     네트워크 없이 시험하는 합성(DEMO) 자료
+  cache/           ERA5·ASOS·공식 월평년값 캐시 (커밋됨 → 새로 받지 않아도 바로 산출 가능)
 site/
-  index.html       전망 지도 (Leaflet, 육상 마스킹 필드, 기간 비교)
+  index.html       전망 지도 (Leaflet, 육상 마스킹 필드, 기간 비교, ASOS 지점, 남한 평균 카드)
   point.html       지점 상세 창 (시계열·분포·통계표)
   about.html       서비스 설계·방법
 .github/workflows/
-  outlook.yml      매일 07:10 KST 산출 → outlook-data 브랜치 저장 + GitHub Pages 배포
-  climatology.yml  ERA5 평년값 캐시 구축 (호출 한도 시 다음 날 이어받기)
+  outlook.yml      매일 07:10 KST(예비 08:40·12:10) 산출 → gh-pages 브랜치 게시
+  asos.yml         ASOS 관측 평년·공식 월평년값·상세 격자 고도 캐시 구축 (KMA_APIHUB_KEY 필요)
+  climatology.yml  ERA5 평년값 캐시 구축 (수동)
+  kma_probe.yml    기상청 API 응답 형식 확인용 (수동)
 ```
+
+다른 저장소나 서버에 그대로 옮겨 운영하는 방법은 [docs/SETUP.md](docs/SETUP.md)에 정리되어 있습니다.
 
 ## 실행
 
