@@ -1,5 +1,7 @@
 # 다른 곳에 구축하기
 
+전체 흐름 그림: [flow.png](flow.png) · [flow.html](flow.html)
+
 이 저장소는 서버 없이 **GitHub Actions(계산) + GitHub Pages(웹)** 만으로 돌아갑니다.
 평년 자료 캐시(ERA5, ASOS, 기상청 공식 월평년값, 상세 격자 고도)가 저장소에 들어 있어서,
 복사한 저장소에서는 첫 실행부터 바로 실자료 전망을 만들 수 있습니다.

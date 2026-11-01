@@ -43,6 +43,13 @@ site/
 
 다른 저장소나 서버에 그대로 옮겨 운영하는 방법은 [docs/SETUP.md](docs/SETUP.md)에 정리되어 있습니다.
 
+## 매일 운영 흐름
+
+자료를 어디서 받아 어디에 저장하고, 누가 실행하며, 어디서 표출되는지 한눈에 정리한 그림입니다
+(원본 페이지: [docs/flow.html](docs/flow.html), 웹사이트에서는 `flow.html`).
+
+![매일 운영 흐름](docs/flow.png)
+
 ## 실행
 
 ```bash
