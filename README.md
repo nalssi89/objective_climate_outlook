@@ -64,6 +64,10 @@ python -m http.server -d site 8000  # http://localhost:8000
 저장소에 들어 있는 `site/data/latest/`는 **DEMO(합성) 자료**입니다. 실제 전망은 GitHub Actions가 매일 만들어
 `gh-pages` 브랜치에 웹사이트째 올립니다. 저장소 **Settings → (왼쪽 메뉴) Pages → Build and deployment → Source: Deploy from a branch → Branch: `gh-pages` / `(root)` → Save** 로 설정하면 `https://nalssi89.github.io/objective_climate_outlook/` 에서 열립니다.
 
+## 통계 다운스케일링 상세예측 (PyESD 방식)
+
+`downscaling/`은 EC46·SEAS5 멤버를 1.5° 지상 예측인자(기온·이슬점·해면기압·강수)로 받아, ERA5로 학습한 PyESD 방식(EOF + 반경평균 + 능형회귀) 모형으로 **한반도 0.25° 육지 412격자(북한 포함, 해안·하구 격자 포함)**와 **ASOS 66지점**(제주 4 포함, 남한 평균은 제주 제외 62지점)의 주(1~6주)·월(1~6개월) 기온·강수와 3분위 확률을 만듭니다. 결과는 `site/data/latest/downscaling/`(JSON·CSV·PNG). 자세한 방법·검증은 [downscaling/README.md](downscaling/README.md).
+
 ## 지역 상세화 (기상청 ASOS)
 
 - **ASOS 지점 상세화:** 기상청 공식 평년 지점 66곳(남한 본토 대표 62곳 + 제주 4곳, 대구·전주는 공식 병합 지점 860·864 자료)의 1991–2020 관측으로 평년 분포를 만든다. 평년 범위는 기상청 방식대로 기온은 평년 ± 0.43σ(표본표준편차), 강수·일사·풍속은 33–67 백분위다. 주변 모델 격자의 멤버별 평년편차(기온)·평년비(강수·일사·풍속)를 지점으로 보간해 그 분포에 적용한다. 지도에는 지점 원으로 표시되고, 클릭하면 지점 상세 창이 열린다.

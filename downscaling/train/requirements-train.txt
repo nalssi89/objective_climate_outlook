@@ -1,0 +1,16 @@
+numpy
+pandas
+scipy
+xarray
+netCDF4
+dask
+zarr>=3
+obstore
+scikit-learn>=1.5
+xgboost
+matplotlib
+koreanize-matplotlib
+basemap
+basemap-data-hires
+global-land-mask
+requests
