@@ -151,6 +151,8 @@
   function initMap(korea, neighbors) {
     map = L.map('map', { zoomControl: true, minZoom: 5, maxZoom: 10, zoomSnap: 0.25, attributionControl: true });
     map.attributionControl.setPrefix(false);
+    // PC 한 화면 배치에서는 하단 출처가 숨으므로 지도 출처란에 표기
+    map.attributionControl.addAttribution('ECMWF EC46·SEAS5·ERA5 via <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> · 기상청 ASOS · 경계 Natural Earth·통계청');
     map.createPane('land').style.zIndex = 200;
     map.createPane('field').style.zIndex = 300;
     map.createPane('lines').style.zIndex = 420;
@@ -161,6 +163,10 @@
     nkLayer = L.geoJSON({ type: 'FeatureCollection', features: korea.features.filter((f) => f.properties.name === 'North Korea') },
       { pane: 'land', interactive: false, style: { className: 'nb-land', weight: 0 } });
     L.geoJSON(korea, { pane: 'lines', interactive: false, style: { className: 'kr-line', weight: 0.9, fill: false } }).addTo(map);
+    // 남한 시도 경계 (통계청 2018)
+    K.getJSON('data/geo/kr_provinces.geojson').then((g) => {
+      L.geoJSON(g, { pane: 'lines', interactive: false, style: { className: 'prov-line', weight: 0.9, fill: false } }).addTo(map);
+    }).catch(() => {});
     map.fitBounds(REGIONS[state.region].bounds);
     map.setMaxBounds([[28, 115], [48, 140]]);
 
@@ -335,6 +341,11 @@
     renderThumbs();
     renderStations();
     renderKorea();
+    // 카드 표시 등으로 지도 영역 크기가 바뀔 수 있음. 처음 한 번은 크기가 정해진 뒤 영역에 맞춰 다시 확대
+    setTimeout(() => {
+      map.invalidateSize();
+      if (!state.fitted) { map.fitBounds(REGIONS[state.region].bounds); state.fitted = true; }
+    }, 0);
     // 열려 있는 지점 창도 같은 전망·요소로 동기화
     if (!$('pointWin').hidden && state.open) setFrame(state.open);
   }
@@ -367,7 +378,7 @@
     for (const p of P.periods) {
       const f = currentField(p.id);
       const sp = spec(f, p);
-      let c = composite(f, p, state.region === 'kr' ? 260 : 150);
+      let c = composite(f, p, state.region === 'kr' ? 300 : 170);
       (state.region === 'kr' ? rendererSK : renderer).outline(c);
       if (state.region === 'kr') c = crop(c, REGIONS.kr.bounds);
       const card = document.createElement('button');
@@ -511,7 +522,9 @@
         <div class="krb">${parts.map(([v, c, n, ink]) => `<span style="flex:${Math.max(v, 0.5)};background:${c};color:${ink}" title="${n} ${v}%">${v >= 12 ? n + ' ' + v + '%' : ''}</span>`).join('')}</div>
         <div class="krm">예측 평균 <b>${K.fmt(r.mean, vk === 't2m' ? 1 : 0)}${u}</b></div></div>`;
     };
-    box.innerHTML = `<div class="krh"><b>남한 평균 ${P.label}</b> <span class="hint">본토 62개 지점 · 기상청 공식 1991–2020 월평년 범위 기준 3분류 확률</span></div>${row('t2m')}${row('precip')}`;
+    const official = Object.values(k).every((r) => r.src !== 'obs');
+    const basis = official ? '기상청 공식 1991–2020 월평년 범위' : '62개 지점 평균 관측 1991–2020 (기온 평년 ± 0.43σ, 강수 33–67%)';
+    box.innerHTML = `<div class="krh"><b>남한 평균 ${P.label}</b> <span class="hint">본토 62개 지점 · ${basis} 기준 3분류 확률</span></div><div class="krrows">${row('t2m')}${row('precip')}</div>`;
     box.hidden = false;
   }
 

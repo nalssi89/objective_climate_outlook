@@ -398,29 +398,51 @@ class OfficialClim:
         return new, shape
 
 
-def korea_average(S, smeta):
-    """남한 본토 62개 지점 평균의 멤버 값을 기상청 공식 월평년 '비슷' 범위로 3분류 (달력 월만)."""
+def korea_average(S, smeta, sclim=None):
+    """남한 본토 62개 지점 평균의 멤버 값을 3분류.
+
+    - 달력 월(3개월 전망): 기상청 공식 월평년 '비슷' 범위표
+    - 주(1개월 전망): 같은 62개 지점 평균 관측 계열(1991–2020)로 같은 방식(기온 평년 ± 0.43σ, 강수 33–67 백분위)
+    """
     idx = [i for i, m in enumerate(smeta) if m["stn"] in KOREA_MAINLAND_62]
+    base = getattr(sclim, "sclim", sclim)  # OfficialClim 이면 안쪽의 관측 평년
+    region = None
+    if base is not None:
+        region = Climatology([[36.0, 128.0]], [base.d0 + dt.timedelta(days=i) for i in range(base.ndays)],
+                             {k: np.nanmean(v[idx], axis=0)[None, :] for k, v in base.data.items() if k in KOREA_OFFICIAL_MONTHLY})
     out = {}
     for p in S["periods"]:
-        if not is_calendar_month(p):
-            continue
-        mm = p["start"].month - 1
         res = {}
         for vk, crit in KOREA_OFFICIAL_MONTHLY.items():
             if vk not in S["members"] or p["id"] not in S["members"][vk]:
                 continue
             Y = np.nanmean(S["members"][vk][p["id"]][idx], axis=0)  # (멤버,)
             Y = Y[np.isfinite(Y)]
-            if vk == "t2m":
-                lo, hi = crit["normal"][mm] - crit["half"][mm], crit["normal"][mm] + crit["half"][mm]
+            if is_calendar_month(p):
+                mm = p["start"].month - 1
+                normal = crit["normal"][mm]
+                if vk == "t2m":
+                    lo, hi = normal - crit["half"][mm], normal + crit["half"][mm]
+                else:
+                    lo, hi = crit["lower"][mm], crit["upper"][mm]
+                src = "official"
+            elif region is not None:
+                V = VARIABLES[vk]
+                st = region.stats(vk, p["start"], p["end"], V["agg"], V["mode"])
+                if st is None:
+                    continue
+                mean, shape = st[0][0], st[1][0]
+                normal = mean
+                lo, hi = (mean + shape[1], mean + shape[3]) if V["mode"] == "add" else (mean * shape[1], mean * shape[3])
+                src = "obs"
             else:
-                lo, hi = crit["lower"][mm], crit["upper"][mm]
+                continue
             below, above = float(np.mean(Y < lo)), float(np.mean(Y > hi))
-            res[vk] = {"normal": crit["normal"][mm], "lower": round(lo, 1), "upper": round(hi, 1),
+            res[vk] = {"normal": round(float(normal), 1), "lower": round(float(lo), 1), "upper": round(float(hi), 1),
                        "mean": r2(float(np.mean(Y))), "below": round(100 * below), "above": round(100 * above),
-                       "near": 100 - round(100 * below) - round(100 * above), "n": int(len(Y))}
-        out[p["id"]] = res
+                       "near": 100 - round(100 * below) - round(100 * above), "n": int(len(Y)), "src": src}
+        if res:
+            out[p["id"]] = res
     return out
 
 
@@ -562,11 +584,12 @@ def write_outputs(products, points, demo, clim, stations=None, fine=None):
 
     if stations:
         (tmp / "stations").mkdir()
-        smeta, sprod = stations
+        smeta, sprod = stations[:2]
+        stations_clim = stations[2] if len(stations) > 2 else None
         index = {"source": "기상청 ASOS 1991–2020 관측 평년", "stations": [
             {k: m[k] for k in ("stn", "name", "lat", "lon", "ht", "missing")} for m in smeta], "products": {}}
         for key, S in sprod.items():
-            index["products"][key] = {"fields": S["fields"], "korea": korea_average(S, smeta)}
+            index["products"][key] = {"fields": S["fields"], "korea": korea_average(S, smeta, stations_clim)}
         json.dump(index, open(tmp / "stations.json", "w"), ensure_ascii=False, separators=(",", ":"))
         for i, m in enumerate(smeta):
             out = {"lat": m["lat"], "lon": m["lon"], "stn": m["stn"], "name": m["name"], "ht": m["ht"],
@@ -649,7 +672,7 @@ def main():
             sclim = OfficialClim(sclim, smeta, official)
             print(f"[stations] 달력 월은 기상청 공식 월평년값 사용 ({len(official)}개 지점)")
         print(f"[stations] ASOS {len(smeta)}개 지점 상세화")
-        stations = (smeta, {k: compute_stations(R, points, sclim, smeta) for k, R in products.items()})
+        stations = (smeta, {k: compute_stations(R, points, sclim, smeta) for k, R in products.items()}, sclim)
     fine = None
     fg_path = ROOT / "site" / "data" / "grid_fine.json"
     if sclim is not None and fg_path.exists():
