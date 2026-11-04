@@ -4,9 +4,17 @@
   const K = window.KCO;
   const $ = (id) => document.getElementById(id);
 
-  const state = { issue: 'latest', product: '1m', var: 't2m', period: null, display: 'tercile', thr: null, side: 'high' };
+  const state = { region: 'kr', issue: 'latest', product: '1m', var: 't2m', period: null, display: 'tercile', thr: null, side: 'high' };
   let manifest, latestManifest, archive, grid, renderer, map, overlay, gridLayer, tileLayer, selMarker;
   let stationsData = null, stationLayer = null;
+  let rendererSK = null, southGeo = null, nkLayer = null;
+  const northMarkers = [];
+  // 영역별 지도 범위와 0.5° 그림
+  const REGIONS = {
+    kr: { name: '남한', bounds: [[33.0, 125.0], [38.7, 129.8]] },
+    pen: { name: '한반도', bounds: [[33.1, 124.3], [43.0, 131.0]] },
+  };
+  const baseR = () => (state.region === 'kr' ? rendererSK : renderer);
   let fineGrid = null, fineRenderer = null;
   const fineMaps = {};
   const fineOn = () => fineRenderer && state.issue === 'latest' && $('fineChk').checked && !!fineField();
@@ -28,6 +36,9 @@
     }
     const [korea, neighbors] = await Promise.all([K.getJSON('data/geo/korea.geojson'), K.getJSON('data/geo/neighbors.geojson')]);
     renderer = new K.FieldRenderer(grid, korea);
+    // 남한만 칠하는 0.5° 그림(영역 '남한'일 때)
+    southGeo = { type: 'FeatureCollection', features: korea.features.filter((f) => f.properties.name === 'South Korea') };
+    rendererSK = new K.FieldRenderer(grid, southGeo);
     if (!manifest.products[state.product]) state.product = Object.keys(manifest.products)[0];
 
     latestManifest = manifest;
@@ -51,6 +62,7 @@
     }
 
     initMap(korea, neighbors);
+    applyRegion(false);
     buildStaticControls();
     await update();
   }
@@ -122,10 +134,12 @@
 
   function readHash() {
     const h = new URLSearchParams(location.hash.slice(1));
-    for (const k of ['issue', 'product', 'var', 'period', 'display', 'thr', 'side']) if (h.get(k)) state[k] = h.get(k);
+    for (const k of ['region', 'issue', 'product', 'var', 'period', 'display', 'thr', 'side']) if (h.get(k)) state[k] = h.get(k);
+    if (!REGIONS[state.region]) state.region = 'kr';
   }
   function writeHash() {
     const h = new URLSearchParams();
+    if (state.region !== 'kr') h.set('region', state.region);
     if (state.issue !== 'latest') h.set('issue', state.issue);
     for (const k of ['product', 'var', 'period', 'display']) h.set(k, state[k]);
     if (state.display === 'threshold') h.set('thr', state.thr);
@@ -143,12 +157,15 @@
     map.createPane('labels').style.zIndex = 450;
     L.geoJSON(neighbors, { pane: 'land', interactive: false, style: { className: 'nb-land', weight: 0.6 } }).addTo(map);
     L.geoJSON(korea, { pane: 'land', interactive: false, style: { className: 'kr-land', weight: 0 } }).addTo(map);
+    // 영역 '남한'일 때 북한 육지를 주변국처럼 회색으로 덮는 층
+    nkLayer = L.geoJSON({ type: 'FeatureCollection', features: korea.features.filter((f) => f.properties.name === 'North Korea') },
+      { pane: 'land', interactive: false, style: { className: 'nb-land', weight: 0 } });
     L.geoJSON(korea, { pane: 'lines', interactive: false, style: { className: 'kr-line', weight: 0.9, fill: false } }).addTo(map);
-    map.fitBounds([[33.1, 124.3], [43.0, 131.0]]);
+    map.fitBounds(REGIONS[state.region].bounds);
     map.setMaxBounds([[28, 115], [48, 140]]);
 
-    for (const [name, la, lo] of K.CITIES) {
-      L.marker([la, lo], {
+    for (const [name, la, lo, north] of K.CITIES) {
+      const mk = L.marker([la, lo], {
         pane: 'labels',
         icon: L.divIcon({ className: 'city', html: `<i></i><span>${name}</span>`, iconSize: [8, 8], iconAnchor: [4, 4] }),
         keyboard: false,
@@ -157,6 +174,7 @@
       o.value = `${la},${lo}`;
       o.textContent = name;
       $('citySel').appendChild(o);
+      if (north) northMarkers.push([mk, o]);
     }
     gridLayer = L.layerGroup(grid.points.map((p) => L.circleMarker(p, { pane: 'labels', radius: 2, className: 'gridpt', interactive: false })));
     tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -166,7 +184,7 @@
     map.on('mousemove', onHover);
     map.on('mouseout', () => ($('hoverBox').hidden = true));
     map.on('click', (e) => {
-      if (renderer.isLand(e.latlng.lat, e.latlng.lng) || K.nearestPoint(grid, e.latlng.lat, e.latlng.lng).dist < 0.3) {
+      if (baseR().isLand(e.latlng.lat, e.latlng.lng) || (state.region === 'pen' && K.nearestPoint(grid, e.latlng.lat, e.latlng.lng).dist < 0.3)) {
         openPoint(e.latlng.lat, e.latlng.lng);
       }
     });
@@ -212,6 +230,8 @@
   }
 
   function buildControls() {
+    seg($('regionSeg'), Object.entries(REGIONS).map(([k, r]) => [k, `<b>${r.name}</b>`]), state.region,
+      (v) => { state.region = v; applyRegion(true); update(); });
     const P = manifest.products[state.product];
     seg($('productSeg'), Object.entries(manifest.products).map(([k, p]) => [k, `<b>${p.name}</b><small>${k === '1m' ? '주별 · 4주' : '월별 · 3개월'}</small>`]),
       state.product, (v) => { state.product = v; state.period = null; update(); });
@@ -347,8 +367,9 @@
     for (const p of P.periods) {
       const f = currentField(p.id);
       const sp = spec(f, p);
-      const c = composite(f, p, 150);
-      renderer.outline(c);
+      let c = composite(f, p, state.region === 'kr' ? 260 : 150);
+      (state.region === 'kr' ? rendererSK : renderer).outline(c);
+      if (state.region === 'kr') c = crop(c, REGIONS.kr.bounds);
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'thumb' + (p.id === state.period ? ' on' : '');
@@ -361,6 +382,28 @@
     }
   }
 
+  // 그림에서 위경도 범위만 잘라낸 캔버스 (영역 '남한' 기간 비교용)
+  function crop(c, b) {
+    const [x0, y0] = renderer.toPixel(b[1][0], b[0][1], c.width, c.height);
+    const [x1, y1] = renderer.toPixel(b[0][0], b[1][1], c.width, c.height);
+    const out = document.createElement('canvas');
+    out.width = Math.round(x1 - x0);
+    out.height = Math.round(y1 - y0);
+    out.getContext('2d').drawImage(c, x0, y0, x1 - x0, y1 - y0, 0, 0, out.width, out.height);
+    return out;
+  }
+
+  // 영역(남한/한반도) 적용: 지도 범위, 북한 회색 처리, 북한 도시 표시
+  function applyRegion(fit) {
+    const kr = state.region === 'kr';
+    if (kr) nkLayer.addTo(map); else nkLayer.remove();
+    for (const [mk, o] of northMarkers) {
+      if (kr) mk.remove(); else mk.addTo(map);
+      o.hidden = kr;
+    }
+    if (fit) map.fitBounds(REGIONS[state.region].bounds);
+  }
+
   // ---------------------------------------------------------------- 남한 20 km 상세화 합성
   function fineField(pid = state.period) {
     const m = fineMaps[state.product];
@@ -369,7 +412,7 @@
   // 0.5° 전체 그림 위에 남한 0.2° 상세화 그림을 같은 메르카토르 좌표로 겹친다
   function composite(f, period, width) {
     const sp = spec(f, period);
-    const canvas = renderer.render(sp.layers, sp.color, width);
+    const canvas = baseR().render(sp.layers, sp.color, width);
     const ff = fineField(period.id);
     if (!fineOn() || !ff) return canvas;
     const fsp = spec(ff, period);
@@ -385,7 +428,7 @@
   function onHover(e) {
     const box = $('hoverBox');
     const { lat, lng } = e.latlng;
-    if (!renderer || !state.spec || !renderer.isLand(lat, lng)) { box.hidden = true; return; }
+    if (!renderer || !state.spec || !baseR().isLand(lat, lng)) { box.hidden = true; return; }
     let sp = state.spec, rr = renderer, tag = '0.5° 격자';
     if (fineOn() && fineRenderer.isLand(lat, lng)) {
       const P0 = manifest.products[state.product];
