@@ -2,6 +2,7 @@ name: 상세예측 시험 실행
 
 # 상세예측(downscaling/forecast.py)만 실제 Open-Meteo 자료로 돌려 결과를 Actions 아티팩트로 남긴다.
 # 웹사이트(gh-pages)는 건드리지 않는다. 운영 게시는 「객관기후예측 갱신」이 함께 수행한다.
+# 결과는 아티팩트와 함께 downscaling-preview 브랜치(단일 커밋, 이력 누적 없음)에도 올려 바로 볼 수 있게 한다.
 on:
   workflow_dispatch:
   push:
@@ -9,7 +10,7 @@ on:
     paths: ["downscaling/**", ".github/workflows/downscaling.yml"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   run:
@@ -28,3 +29,15 @@ jobs:
         with:
           name: downscaling
           path: out/downscaling
+      - name: downscaling-preview 브랜치에 결과 올리기
+        if: success()
+        run: |
+          set -e
+          cp -r out/downscaling /tmp/preview
+          cd /tmp/preview
+          git init -q -b downscaling-preview
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "downscaling preview $(date -u +%Y-%m-%dT%H:%MZ) from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" downscaling-preview

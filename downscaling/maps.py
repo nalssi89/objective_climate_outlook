@@ -14,10 +14,20 @@ INK = "#1f1f1c"
 DIV_T = mcolors.LinearSegmentedColormap.from_list("t", ["#104281", "#3987e5", "#b7d3f6", "#f0efec", "#f7c4b8", "#e34948", "#8f1d1d"])
 DIV_P = mcolors.LinearSegmentedColormap.from_list("p", ["#7a4a12", "#c98500", "#f3dca3", "#f0efec", "#a8dcc6", "#1baf7a", "#0b5e40"])
 BOX = (123.6, 33.0, 131.2, 43.1)
-try:
-    import koreanize_matplotlib  # noqa: F401
-except ImportError:
-    pass
+def _korean_font():
+    """koreanize-matplotlib 의 나눔고딕을 직접 등록 (패키지 import 는 Python 3.12 에서 실패할 수 있음)."""
+    import importlib.util
+    from matplotlib import font_manager
+    spec = importlib.util.find_spec("koreanize_matplotlib")
+    if spec and spec.origin:
+        fonts = sorted(Path(spec.origin).parent.glob("**/*.ttf"))
+        for f in fonts:
+            font_manager.fontManager.addfont(str(f))
+        if fonts:
+            plt.rcParams["font.family"] = font_manager.FontProperties(fname=str(fonts[0])).get_name()
+
+
+_korean_font()
 plt.rcParams.update({"axes.unicode_minus": False, "font.size": 8, "figure.dpi": 140})
 
 
