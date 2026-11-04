@@ -53,5 +53,6 @@ for kind in ("grid", "asos"):
             if kind == "asos":
                 st = xr.open_dataset(WORK / "target_asos.nc")
                 d["stn"] = st.stn.values; d["name"] = st.name.values.astype(str)
+                d["jeju"] = st.jeju.values.astype("int8") if "jeju" in st else np.zeros(st.sizes["stn"], "int8")
             np.savez_compressed(out / f"{kind}_{var}_{scale}.npz", **d)
             print(kind, var, scale, (out / f"{kind}_{var}_{scale}.npz").stat().st_size // 1024, "KB")

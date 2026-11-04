@@ -79,7 +79,7 @@ def fig_domain():
     m = g.mask.values
     field(ax[1], np.where(m, 1, np.nan)[m], *[np.meshgrid(g.lat, g.lon, indexing="ij")[i][m] for i in (0, 1)],
           mcolors.ListedColormap(["#cde2fb"]), 0, 2)
-    ax[1].scatter(a.lon, a.lat, s=9, color=INK, label="ASOS 62지점")
+    ax[1].scatter(a.lon, a.lat, s=9, color=INK, label="ASOS 66지점")
     mapax(ax[1], f"타깃: ERA5 0.25° 육지 {int(m.sum())}격자 + ASOS")
     ax[1].legend(loc="upper left", fontsize=8, frameon=False)
     fig.tight_layout(); fig.savefig(FIG / "fig01_domain.png"); plt.close(fig)

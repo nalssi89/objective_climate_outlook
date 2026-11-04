@@ -1,6 +1,6 @@
 # 한반도 상세예측: PyESD 방식 통계 다운스케일링
 
-EC46(주 1~6주)·SEAS5(월 1~6개월) 51개 멤버를 **한반도 0.25° 육지 351격자(북한 포함)**와 **ASOS 62지점**의 기온·강수로 상세화합니다.
+EC46(주 1~6주)·SEAS5(월 1~6개월) 51개 멤버를 **한반도 0.25° 육지 351격자(북한 포함)**와 **ASOS 66지점**(제주 4 포함, 남한 평균은 제주 제외 62지점)의 기온·강수로 상세화합니다.
 [PyESD](https://github.com/Dan-Boat/PyESD)(Boateng & Mutz, 경험적 통계 다운스케일링)의 Perfect-Prognosis 구성을 따랐고,
 PyESD 1.0.7은 scikit-learn 1.9와 맞지 않아(ARD `n_iter` 등) 같은 구성요소를 직접 구현했습니다.
 
@@ -17,7 +17,7 @@ PyESD 1.0.7은 scikit-learn 1.9와 맞지 않아(ARD `n_iter` 등) 같은 구성
 
 - **지상변수만 쓰는 이유:** Open-Meteo 계절예보 API는 기압면 변수를 주지 않습니다. 학습(ERA5)과 예보 모두 같은 좌표의 점값을 씁니다.
 - **모델 계통오차:** Open-Meteo 원자료는 보정되지 않았으므로, `pipeline/outlook.py`와 같은 방식으로 ECMWF 주·월 편차(재예측 기후 기준)로 모델 평년값을 역산한 뒤 ERA5 평년에 맞춥니다(기온·이슬점·해면기압 가법, 강수 승법). 편차 변수가 없으면 보정을 생략하고 `bias` 항목에 `none`으로 남깁니다.
-- **타깃:** ERA5 0.25° 매시간(ECMWF ARCO) → KST 일평균 기온·일강수량. 북한은 관측이 없어 ERA5 격자를 타깃으로 하고, 남한은 ASOS 62지점도 따로 학습합니다.
+- **타깃:** ERA5 0.25° 매시간(ECMWF ARCO) → KST 일평균 기온·일강수량. 북한은 관측이 없어 ERA5 격자를 타깃으로 하고, 남한은 ASOS 66지점(내륙 62 + 제주 4)도 따로 학습합니다. 남한 평균 통계는 제주를 뺀 62지점으로 냅니다.
 
 ## 검증 (다운스케일링 기술: 재분석 대규모장을 넣었을 때)
 
@@ -56,7 +56,7 @@ python downscaling/forecast.py --demo --maps     # 네트워크 없이 합성 �
 
 산출 (`site/data/latest/downscaling/`)
 - `downscaling.json`: 격자·지점 좌표, 기간별 편차·값·3분위 확률·교차검증 상관, 계통오차 보정량
-- `asos62_downscaled.csv`: ASOS 62지점 주·월 기온·강수 예측표
+- `asos66_downscaled.csv`: ASOS 66지점 주·월 기온·강수 예측표 (`jeju` 열 1 = 제주 4지점)
 - `map_week.png`, `map_month.png`: 기온 편차·우세범주, 강수 평년비·우세범주 지도
 
 GitHub Actions 「객관기후예측 갱신」에서 기존 산출 다음에 실행됩니다(실패해도 기존 전망 게시는 계속).
@@ -68,7 +68,8 @@ pip install -r downscaling/train/requirements-train.txt
 cd downscaling/train && export KDS_RAW=work/raw KDS_WORK=work OMP_NUM_THREADS=1
 CDSAPI_KEY=... python get_era5_kor.py      # 한반도 0.25° 타깃 (ARCO geoChunked, 약 2분)
 CDSAPI_KEY=... python get_era5_pred.py     # 1.5° 예측인자 (약 6분)
-KMA_AUTHKEY=... python get_asos.py         # ASOS 62지점 1991~
+KMA_AUTHKEY=... python get_asos.py         # ASOS 내륙 62지점 1991~
+KMA_AUTHKEY=... python get_asos_jeju.py    # 제주 4지점
 python prep.py && python train.py          # 학습·교차검증 (격자 주 단위가 가장 오래 걸림, 약 25분)
 python compare_models.py && python make_figs.py
 python export_models.py ../models          # 운영용 계수 (.npz, 약 10 MB)

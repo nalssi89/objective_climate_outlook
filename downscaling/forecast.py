@@ -4,7 +4,7 @@ ECMWF EC46(주 1~6주)·SEAS5(월 1~6개월) 51개 멤버를 Open-Meteo에서 1.
   1) ECMWF 주·월 편차(모델 기후 기준)로 모델 평년값을 역산해 계통오차를 ERA5 기후로 맞추고
      (기온·이슬점·해면기압은 가법, 강수는 승법; 편차 변수가 없으면 보정 생략)
   2) 학습된 모형(models/*.npz: 변수별 EOF + 반경 250 km 평균 → 점별 능형회귀)으로
-     한반도 0.25° 육지 351격자(북한 포함)와 ASOS 62지점 값을 멤버별로 예측하고
+     한반도 0.25° 육지 351격자(북한 포함)와 ASOS 66지점(제주 4 포함) 값을 멤버별로 예측하고
   3) 교차검증 잔차 σ 로 3분위 확률(낮음·비슷·높음, 1991–2020 기준)을 계산한다.
 
   python downscaling/forecast.py [--out site/data/latest/downscaling] [--demo]
@@ -242,11 +242,13 @@ def demo_blocks(dates, scale):
 
 
 def to_json(out, products):
-    """사이트용 JSON: 격자(351)·지점(62) 좌표는 한 번, 값은 기간별 배열"""
+    """사이트용 JSON: 격자(351)·지점(66) 좌표는 한 번, 값은 기간별 배열. south_mean = 제주 제외 62지점 평균"""
     out.mkdir(parents=True, exist_ok=True)
     g, a = load_model("grid", "T", "week"), load_model("asos", "T", "week")
     meta = dict(grid=dict(lat=g["lat"].round(2).tolist(), lon=g["lon"].round(2).tolist()),
-                asos=dict(stn=a["stn"].tolist(), name=a["name"].tolist(), lat=a["lat"].round(4).tolist(), lon=a["lon"].round(4).tolist()))
+                asos=dict(stn=a["stn"].tolist(), name=a["name"].tolist(), lat=a["lat"].round(4).tolist(), lon=a["lon"].round(4).tolist(),
+                          jeju=[int(v) for v in a["jeju"]] if "jeju" in a else [0] * len(a["stn"])))
+    south = np.asarray(meta["asos"]["jeju"]) == 0   # 남한 평균 = 제주 제외 62지점
     rnd = lambda x, nd=2: [None if not np.isfinite(v) else round(float(v), nd) for v in np.asarray(x)]  # noqa: E731
     pct = lambda x: [None if not np.isfinite(v) else int(round(100 * float(v))) for v in np.asarray(x)]  # noqa: E731
     js = dict(meta=meta, generated=dt.datetime.now(dt.timezone.utc).isoformat(timespec="minutes"), products={})
@@ -257,19 +259,27 @@ def to_json(out, products):
             for k in ("grid_T", "grid_P", "asos_T", "asos_P"):
                 r = it[k]
                 d[k] = {f: (pct(r[f]) if f in ("below", "near", "above") else rnd(r[f], 0 if f == "pct" else 2)) for f in r}
+            T, Pp = it["asos_T"], it["asos_P"]
+            d["south_mean"] = dict(n=int(south.sum()),
+                T_anom=round(float(np.nanmean(np.asarray(T["anom"])[south])), 2),
+                T_above=int(round(100 * float(np.nanmean(np.asarray(T["above"])[south])))),
+                T_below=int(round(100 * float(np.nanmean(np.asarray(T["below"])[south])))),
+                P_pct=int(round(float(np.nanmean(np.asarray(Pp["pct"])[south])))),
+                P_above=int(round(100 * float(np.nanmean(np.asarray(Pp["above"])[south])))),
+                P_below=int(round(100 * float(np.nanmean(np.asarray(Pp["below"])[south])))))
             per.append(d)
         js["products"][scale] = dict(issued=P["issued"], model=P["model"], periods=per)
     (out / "downscaling.json").write_text(json.dumps(js, ensure_ascii=False, separators=(",", ":")))
     # ASOS 지점 표 (CSV)
-    rows = ["product,period,stn,name,T_anom,T_value,T_below,T_near,T_above,P_value,P_pct,P_below,P_near,P_above"]
+    rows = ["product,period,stn,name,jeju,T_anom,T_value,T_below,T_near,T_above,P_value,P_pct,P_below,P_near,P_above"]
     for scale, P in products.items():
         for it in P["periods"]:
             T, Pp = it["asos_T"], it["asos_P"]
             for j, s in enumerate(meta["asos"]["stn"]):
-                rows.append(",".join(map(str, [scale, it["period"], s, meta["asos"]["name"][j],
+                rows.append(",".join(map(str, [scale, it["period"], s, meta["asos"]["name"][j], meta["asos"]["jeju"][j],
                     f"{T['anom'][j]:.2f}", f"{T['value'][j]:.2f}", f"{T['below'][j]:.2f}", f"{T['near'][j]:.2f}", f"{T['above'][j]:.2f}",
                     f"{Pp['value'][j]:.2f}", f"{Pp['pct'][j]:.0f}", f"{Pp['below'][j]:.2f}", f"{Pp['near'][j]:.2f}", f"{Pp['above'][j]:.2f}"])))
-    (out / "asos62_downscaled.csv").write_text("\n".join(rows) + "\n", encoding="utf-8-sig")
+    (out / "asos66_downscaled.csv").write_text("\n".join(rows) + "\n", encoding="utf-8-sig")
 
 
 def main():

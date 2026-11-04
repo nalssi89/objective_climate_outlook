@@ -1,4 +1,4 @@
-"""학습자료 정리: 한반도 0.25도 타깃(북한 포함 육지), ASOS 62지점, 1.5도 대규모 예측인자.
+"""학습자료 정리: 한반도 0.25도 타깃(북한 포함 육지), ASOS 66지점(제주 4 포함), 1.5도 대규모 예측인자.
 출력 (WORK 폴더): target_grid.nc, target_asos.nc, pred.nc
 """
 import os, sys
@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np, pandas as pd, xarray as xr
 from global_land_mask import globe
 
-RAW = Path(os.environ.get("KDS_RAW", "work/raw"))
-WORK = Path(os.environ.get("KDS_WORK", "work")); WORK.mkdir(exist_ok=True, parents=True)
+RAW = Path(os.environ.get("KDS_RAW", "/home/user/kds"))
+WORK = Path(os.environ.get("KDS_WORK", "/home/user/kds/work")); WORK.mkdir(exist_ok=True, parents=True)
 T0, T1 = "1991-01-01", "2026-10-28"
 
 # 압록강·두만강을 따라 그린 한반도 경계(대략) + 남쪽 바다
@@ -37,22 +37,27 @@ def target_grid():
 
 
 def target_asos():
+    """ASOS 66지점(남한 내륙 62 + 제주 4). 남한 평균은 jeju==0 인 62지점으로 계산한다."""
     sys.path.insert(0, str(Path(__file__).parent))
-    from kma_util import STN62, NORMAL_ID
-    obs = pd.concat([pd.read_csv(f) for f in sorted((RAW / "asos").glob("asos_*.csv"))])
+    os.environ.setdefault("CA_DATA", str(RAW / "ca_data"))
+    from kma_util import NORMAL_ID
+    st = pd.read_csv(Path(__file__).parent / "asos66_stations.csv")
+    STN = st.STN.tolist()
+    files = sorted((RAW / "asos").glob("asos_*.csv")) + sorted((RAW / "asos_jeju").glob("asos_jeju_*.csv"))
+    obs = pd.concat([pd.read_csv(f) for f in files])
     obs["date"] = pd.to_datetime(obs.TM.astype(int).astype(str).str[:8])
-    obs = obs[obs.STN.isin(STN62)]
+    obs = obs[obs.STN.isin(STN)]
     obs.loc[obs.TA_AVG <= -90, "TA_AVG"] = np.nan
     obs["RN_DAY"] = obs.RN_DAY.clip(lower=0)
     T = obs.pivot_table(index="date", columns="STN", values="TA_AVG")
     P = obs.pivot_table(index="date", columns="STN", values="RN_DAY")
-    st = pd.read_csv(Path(__file__).with_name("asos62_stations.csv")).set_index("STN").loc[STN62]
     idx = pd.date_range(T0, T1)
-    ds = xr.Dataset({"T": (("time", "stn"), T.reindex(index=idx, columns=STN62).values),
-                     "P": (("time", "stn"), P.reindex(index=idx, columns=STN62).values)},
-                    coords={"time": idx, "stn": STN62, "lat": ("stn", st.lat.values),
+    ds = xr.Dataset({"T": (("time", "stn"), T.reindex(index=idx, columns=STN).values),
+                     "P": (("time", "stn"), P.reindex(index=idx, columns=STN).values)},
+                    coords={"time": idx, "stn": STN, "lat": ("stn", st.lat.values),
                             "lon": ("stn", st.lon.values), "name": ("stn", st.name.values),
-                            "norm_id": ("stn", [NORMAL_ID.get(s, s) for s in STN62])})
+                            "jeju": ("stn", st.jeju.values.astype(int)),
+                            "norm_id": ("stn", [NORMAL_ID.get(s, s) for s in STN])})
     ds.to_netcdf(WORK / "target_asos.nc"); print("asos", dict(ds.sizes), float(ds["T"].isnull().mean()))
 
 
