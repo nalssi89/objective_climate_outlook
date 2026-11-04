@@ -1,0 +1,30 @@
+name: 상세예측 시험 실행
+
+# 상세예측(downscaling/forecast.py)만 실제 Open-Meteo 자료로 돌려 결과를 Actions 아티팩트로 남긴다.
+# 웹사이트(gh-pages)는 건드리지 않는다. 운영 게시는 「객관기후예측 갱신」이 함께 수행한다.
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore: [claude/korean-climate-forecast-service-4ywyj2, main, gh-pages]
+    paths: ["downscaling/**", ".github/workflows/downscaling.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r pipeline/requirements.txt -r downscaling/requirements.txt
+      - name: 상세예측
+        run: python downscaling/forecast.py --maps --out out/downscaling
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: downscaling
+          path: out/downscaling

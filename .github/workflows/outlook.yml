@@ -10,7 +10,8 @@ on:
     - cron: "40 23 * * *"
     - cron: "10 3 * * *"
   push:
-    paths: ["pipeline/**", "site/**", ".github/workflows/outlook.yml"]
+    branches: [claude/korean-climate-forecast-service-4ywyj2, main]   # 기본 브랜치만 게시 (작업 브랜치 push 로 gh-pages 가 바뀌지 않게)
+    paths: ["pipeline/**", "downscaling/**", "site/**", ".github/workflows/outlook.yml"]
   workflow_dispatch:
     inputs:
       demo:
@@ -56,6 +57,11 @@ jobs:
       - run: pip install -r pipeline/requirements.txt
       - name: 전망 산출
         run: python pipeline/outlook.py ${{ inputs.demo && '--demo' || '' }}
+      - name: 상세예측(PyESD 통계 다운스케일링, 0.25° 한반도·ASOS 62지점)
+        continue-on-error: true   # 실패해도 기존 전망 게시는 계속
+        run: |
+          pip install -r downscaling/requirements.txt
+          python downscaling/forecast.py --maps ${{ inputs.demo && '--demo' || '' }}
       - name: 지난 발표 보관(gh-pages 의 archive 이어받기 + 오늘 발표 추가, 45일 보관)
         run: |
           git clone -q --depth 1 -b gh-pages "https://github.com/${{ github.repository }}.git" /tmp/prev || true
