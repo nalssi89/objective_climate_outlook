@@ -67,6 +67,9 @@ jobs:
           set -e
           cp -r site /tmp/pages
           touch /tmp/pages/.nojekyll
+          # 브라우저가 예전 JS·CSS 를 쓰지 않도록 코드 버전을 주소에 붙임(캐시 무효화)
+          v=$(git rev-parse --short HEAD)
+          sed -i -E "s#(src|href)=\"((js|css)/[^\"?]+\.(js|css))\"#\1=\"\2?v=${v}\"#g" /tmp/pages/*.html
           cd /tmp/pages
           git init -q -b gh-pages
           git config user.name "github-actions[bot]"
