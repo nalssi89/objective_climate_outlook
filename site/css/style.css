@@ -83,12 +83,14 @@ select { font: inherit; color: var(--ink); background: var(--surface); border: 1
 .iconbtn:hover { background: var(--surface-2); }
 
 /* ---------- 본문 배치 ---------- */
-.layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; padding: 16px 20px; max-width: 1600px; margin: 0 auto; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; padding: 16px 20px; max-width: 1600px; margin: 0 auto; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; align-self: start; position: sticky; top: 70px; max-height: calc(100vh - 86px); overflow: auto; }
 .panel section + section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .panel h2 { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; margin-bottom: 8px; }
 .seg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .seg4 { grid-template-columns: repeat(4, 1fr); }
+.seg4 button { white-space: nowrap; padding: 7px 2px; font-size: 13px; }
+.seg4 button span { margin-right: 2px; }
 .seg button, .chips button, .list button { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 7px 6px; cursor: pointer; text-align: center; transition: background .12s, border-color .12s; }
 .seg button small, .chips button small { display: block; font-size: 11px; color: var(--muted); }
 .seg button span { margin-right: 3px; }
@@ -158,6 +160,15 @@ body.stn-on .city i { display: none; }
 .krm { font-size: 12.5px; color: var(--ink-2); text-align: right; }
 @media (max-width: 640px) { .krrow { grid-template-columns: 1fr; gap: 4px; } .krm { text-align: left; } }
 
+/* 아래 줄: 기간 비교(왼쪽) + 남한 평균·해설(오른쪽) */
+.bottomrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.infocard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.infocard .kravg { background: none; border: 0; border-radius: 0; padding: 0; }
+.infocard .krrows { grid-template-columns: 1fr; }
+.infocard .krrow { grid-template-columns: 130px minmax(0, 1fr) 92px; }
+.infocard .explain p { margin: 0; color: var(--ink-2); font-size: 12.5px; }
+.infocard .explain .hint { margin-top: 2px; }
+
 /* 기간 비교 */
 .strip { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px 12px; }
 .striphead { font-weight: 600; font-size: 13px; margin-bottom: 8px; }
@@ -184,7 +195,7 @@ body.stn-on .city i { display: none; }
 @media (min-width: 901px) {
   .layout { height: calc(100dvh - 64px); padding-block: 12px; gap: 14px; }
   .panel { position: static; align-self: stretch; max-height: none; height: 100%; }
-  .mapcol { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 8px; height: 100%; min-height: 0; }
+  .mapcol { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; height: 100%; min-height: 0; }
   .mapcol > [hidden] { display: none !important; }
   .mapwrap { min-height: 0; height: 100%; }
   #map { height: 100%; min-height: 260px; }
@@ -199,6 +210,7 @@ body.stn-on .city i { display: none; }
   .foot { display: none; }
 }
 @media (max-width: 900px) {
+  .bottomrow { grid-template-columns: 1fr; }
   .topbar { flex-wrap: wrap; gap: 8px 14px; padding: 10px 16px; position: static; }
   .issue { order: 3; width: 100%; }
   .layout { grid-template-columns: 1fr; padding: 12px 16px; }

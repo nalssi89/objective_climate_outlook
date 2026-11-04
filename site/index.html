@@ -60,11 +60,6 @@
           <div class="seg" id="extremeSeg"></div>
         </div>
       </section>
-      <section class="explain">
-        <h2>해설</h2>
-        <p id="explain"></p>
-        <p class="hint">지도의 육상 지점을 클릭하면 해당 격자의 시계열·확률표가 별도 창으로 열립니다.</p>
-      </section>
       <section>
         <h2>지점 바로가기</h2>
         <select id="citySel"><option value="">도시 선택…</option></select>
@@ -89,15 +84,23 @@
         </div>
         <div class="legend" id="legend" aria-label="범례"></div>
       </div>
-      <div class="kravg" id="krAvg" hidden></div>
       <div class="mapwrap">
         <div id="map" role="application" aria-label="한반도 전망 지도"></div>
         <div class="hoverbox" id="hoverBox" hidden></div>
         <div class="demo-ribbon" id="demoRibbon" hidden>DEMO · 합성 자료</div>
       </div>
-      <div class="strip">
-        <div class="striphead">기간별 비교 <span class="hint">— 클릭하면 해당 기간으로 전환</span></div>
-        <div class="thumbs" id="thumbs"></div>
+      <div class="bottomrow">
+        <div class="strip">
+          <div class="striphead">기간별 비교 <span class="hint">— 클릭하면 해당 기간으로 전환</span></div>
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+        <div class="infocard">
+          <div class="kravg" id="krAvg" hidden></div>
+          <div class="explain">
+            <p><b>해설</b> <span id="explain"></span></p>
+            <p class="hint">지도의 육상 지점을 클릭하면 해당 격자의 시계열·확률표가 별도 창으로 열립니다.</p>
+          </div>
+        </div>
       </div>
     </section>
   </main>
