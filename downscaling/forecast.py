@@ -178,8 +178,9 @@ def downscale(corr, per, scale, kind, var):
         r["value"] = ycl + mu.mean(0)
     else:
         val = np.clip(ycl[None] + mu, 0, None) ** 2                           # mm/일
-        r["value"] = val.mean(0); r["normal"] = M["normal"][m]
-        r["pct"] = 100 * val.mean(0) / np.maximum(M["normal"][m], 0.05)
+        normal = M["normal_doy"][key] if "normal_doy" in M else M["normal"][m]
+        r["value"] = val.mean(0); r["normal"] = normal
+        r["pct"] = 100 * val.mean(0) / np.maximum(normal, 0.05)
     return r, M
 
 

@@ -40,6 +40,16 @@ for kind in ("grid", "asos"):
                     d[f"m{m}_pcsd_{v}"] = np.asarray(e["eof"].pcsd[v], "float32")
             for k in ("q33", "q67", "sigma", "normal", "r_cv"):
                 d[k] = C[k].astype("float32")
+            if var == "P" and scale == "week":
+                # 주 강수 평년(mm/일)을 날짜별로: 1991~2020 같은 날짜 ±15일 평균 (달 경계에서 값이 튀지 않게)
+                cvd = xr.open_dataset(WORK / f"cv_{kind}_P_week.nc").sel(time=slice("1991", "2020"))
+                pm = np.clip(cvd.clim_sqrt.values + cvd.obs.values, 0, None) ** 2
+                doy = cvd.time.dt.dayofyear.values
+                nd = np.zeros((366, pm.shape[1]), "float32")
+                for k in range(1, 367):
+                    dd = np.abs((doy - k + 183) % 366 - 183) <= 15
+                    nd[k - 1] = np.nanmean(pm[dd], 0)
+                d["normal_doy"] = nd
             if kind == "asos":
                 st = xr.open_dataset(WORK / "target_asos.nc")
                 d["stn"] = st.stn.values; d["name"] = st.name.values.astype(str)
