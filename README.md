@@ -66,7 +66,7 @@ python -m http.server -d site 8000  # http://localhost:8000
 
 ## 통계 다운스케일링 상세예측 (PyESD 방식)
 
-`downscaling/`은 EC46·SEAS5 멤버를 1.5° 지상 예측인자(기온·이슬점·해면기압·강수)로 받아, ERA5로 학습한 PyESD 방식(EOF + 반경평균 + 능형회귀) 모형으로 **한반도 0.25° 육지 351격자(북한 포함)**와 **ASOS 66지점**(제주 4 포함, 남한 평균은 제주 제외 62지점)의 주(1~6주)·월(1~6개월) 기온·강수와 3분위 확률을 만듭니다. 결과는 `site/data/latest/downscaling/`(JSON·CSV·PNG). 자세한 방법·검증은 [downscaling/README.md](downscaling/README.md).
+`downscaling/`은 EC46·SEAS5 멤버를 1.5° 지상 예측인자(기온·이슬점·해면기압·강수)로 받아, ERA5로 학습한 PyESD 방식(EOF + 반경평균 + 능형회귀) 모형으로 **한반도 0.25° 육지 412격자(북한 포함, 해안·하구 격자 포함)**와 **ASOS 66지점**(제주 4 포함, 남한 평균은 제주 제외 62지점)의 주(1~6주)·월(1~6개월) 기온·강수와 3분위 확률을 만듭니다. 결과는 `site/data/latest/downscaling/`(JSON·CSV·PNG). 자세한 방법·검증은 [downscaling/README.md](downscaling/README.md).
 
 ## 지역 상세화 (기상청 ASOS)
 

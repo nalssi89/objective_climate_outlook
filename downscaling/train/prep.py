@@ -10,20 +10,29 @@ RAW = Path(os.environ.get("KDS_RAW", "/home/user/kds"))
 WORK = Path(os.environ.get("KDS_WORK", "/home/user/kds/work")); WORK.mkdir(exist_ok=True, parents=True)
 T0, T1 = "1991-01-01", "2026-10-28"
 
-# 압록강·두만강을 따라 그린 한반도 경계(대략) + 남쪽 바다
-KOREA_POLY = np.array([(124.0, 39.6), (124.4, 39.85), (125.0, 40.1), (125.7, 40.5), (126.2, 41.0),
-                       (126.9, 41.75), (127.4, 41.45), (128.15, 41.4), (128.05, 42.0), (128.9, 42.05),
-                       (129.4, 42.45), (129.75, 42.5), (130.0, 42.95), (130.4, 42.6), (130.7, 42.3),
-                       (131.2, 41.8), (132.0, 37.0), (132.0, 33.0), (124.0, 33.0)])
+GEO = Path(os.environ.get("KDS_GEO", Path(__file__).resolve().parents[2] / "site/data/geo/korea.geojson"))
 
 
-def korea_mask(lat, lon):
+def korea_mask(lat, lon, sub=9, min_frac=0.2):
+    """0.25° 셀 안의 sub×sub 표본점 가운데 한반도(남·북한) 경계 폴리곤 안에 드는 비율(육지비율)이 min_frac 이상이면 포함.
+    셀 중심이 바다인 해안·하구 격자(신의주, 서해안 등)도 빠지지 않게 한다. 울릉도 포함, 대마도·규슈 제외."""
+    import json
     from matplotlib.path import Path as MP
+    polys = []
+    for f in json.load(open(GEO, encoding="utf-8"))["features"]:
+        g = f["geometry"]
+        for poly in ([g["coordinates"]] if g["type"] == "Polygon" else g["coordinates"]):
+            polys.append(MP(np.asarray(poly[0])))          # 외곽 링만
+    d = 0.25; off = (np.arange(sub) + 0.5) / sub * d - d / 2
     LO, LA = np.meshgrid(lon, lat)
-    land = globe.is_land(LA, LO)
-    inside = MP(KOREA_POLY).contains_points(np.c_[LO.ravel(), LA.ravel()]).reshape(LO.shape)
-    tsushima_kyushu = (LO > 129.05) & (LA < 34.95)
-    return land & inside & ~tsushima_kyushu
+    ox, oy = np.meshgrid(off, off, indexing="ij")                                  # (sub, sub)
+    pts = np.stack([np.broadcast_to(LO[..., None, None] + ox, LO.shape + (sub, sub)).ravel(),
+                    np.broadcast_to(LA[..., None, None] + oy, LA.shape + (sub, sub)).ravel()], 1)
+    inside = np.zeros(len(pts), bool)
+    for P in polys:
+        inside |= P.contains_points(pts)
+    m = inside.reshape(LO.shape + (sub, sub)).mean((2, 3)) >= min_frac
+    return m & ~((LO > 129.05) & (LA < 34.95))
 
 
 def target_grid():

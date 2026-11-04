@@ -4,7 +4,7 @@ ECMWF EC46(주 1~6주)·SEAS5(월 1~6개월) 51개 멤버를 Open-Meteo에서 1.
   1) ECMWF 주·월 편차(모델 기후 기준)로 모델 평년값을 역산해 계통오차를 ERA5 기후로 맞추고
      (기온·이슬점·해면기압은 가법, 강수는 승법; 편차 변수가 없으면 보정 생략)
   2) 학습된 모형(models/*.npz: 변수별 EOF + 반경 250 km 평균 → 점별 능형회귀)으로
-     한반도 0.25° 육지 351격자(북한 포함)와 ASOS 66지점(제주 4 포함) 값을 멤버별로 예측하고
+     한반도 0.25° 육지 412격자(북한 포함, 해안·하구 격자 포함)와 ASOS 66지점(제주 4 포함) 값을 멤버별로 예측하고
   3) 교차검증 잔차 σ 로 3분위 확률(낮음·비슷·높음, 1991–2020 기준)을 계산한다.
 
   python downscaling/forecast.py [--out site/data/latest/downscaling] [--demo]
@@ -242,7 +242,7 @@ def demo_blocks(dates, scale):
 
 
 def to_json(out, products):
-    """사이트용 JSON: 격자(351)·지점(66) 좌표는 한 번, 값은 기간별 배열. south_mean = 제주 제외 62지점 평균"""
+    """사이트용 JSON: 격자(412)·지점(66) 좌표는 한 번, 값은 기간별 배열. south_mean = 제주 제외 62지점 평균"""
     out.mkdir(parents=True, exist_ok=True)
     g, a = load_model("grid", "T", "week"), load_model("asos", "T", "week")
     meta = dict(grid=dict(lat=g["lat"].round(2).tolist(), lon=g["lon"].round(2).tolist()),
