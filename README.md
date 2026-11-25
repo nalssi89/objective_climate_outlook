@@ -37,7 +37,7 @@ site/
   point.html       지점 상세 창 (시계열·분포·통계표)
   about.html       서비스 설계·방법
 .github/workflows/
-  outlook.yml      매일 07:10 KST(예비 08:40·12:10) 산출 → gh-pages 브랜치 게시
+  outlook.yml      매일 07:10 KST 산출(맥 미니 트리거, 예비 예약 07:23·09:47·13:37) → gh-pages 브랜치 게시
   asos.yml         ASOS 관측 평년·공식 월평년값·상세 격자 고도 캐시 구축 (KMA_APIHUB_KEY 필요)
   climatology.yml  ERA5 평년값 캐시 구축 (수동)
   kma_probe.yml    기상청 API 응답 형식 확인용 (수동)
@@ -75,7 +75,9 @@ python -m http.server -d site 8000  # http://localhost:8000
 
 ## 자동 갱신
 
-- **매일 07:10 KST**(22:10 UTC) GitHub Actions가 최신 EC46·SEAS5를 받아 다시 산출·게시합니다. GitHub 예약 실행은 지연·누락될 수 있어 08:40·12:10 KST에도 걸어 두었고, 그날 07시 이후 발표가 이미 있으면 건너뜁니다.
+- **매일 07:10 KST** 맥 미니(launchd)가 워크플로를 `workflow_dispatch`로 실행하고, GitHub Actions가 최신 EC46·SEAS5를 받아 다시 산출·게시합니다(설치: `zsh ops/macmini/install.sh`).
+- GitHub 예약 실행은 3~10시간씩 늦게 시작되는 일이 잦아(2026-11 실측) 예비로만 둡니다(07:23·09:47·13:37 KST). 그날 07시 이후 발표가 이미 있으면 건너뜁니다.
+- 지난 게시본(보관분)을 받지 못하면 보관분이 지워지지 않도록 게시를 중단합니다.
 - 1개월 전망(EC46)은 매일 새 예측이 나오고, 3개월 전망(SEAS5)은 매월 5일에 바뀝니다.
 - 매일 발표분 지도 자료는 45일간 보관되어, 지도 왼쪽 **발표일** 목록에서 지난 발표를 골라 같은 주간의 예측이 어떻게 바뀌어 왔는지 비교할 수 있습니다.
 - 마지막 발표가 30시간을 넘기면 화면 상단에 '갱신 지연'이 표시됩니다.

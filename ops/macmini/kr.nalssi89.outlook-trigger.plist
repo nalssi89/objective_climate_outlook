@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 매일 07:10(맥 미니 시간대 = KST)에 trigger_outlook.sh 실행.
+     잠자기 중이었으면 깨어난 뒤 한 번 실행된다(스크립트가 이미 게시됐는지 확인). -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>kr.nalssi89.outlook-trigger</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>__HOME__/Projects/Claude/Work/outlook-trigger/trigger_outlook.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>10</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Projects/Claude/Work/outlook-trigger/trigger.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Projects/Claude/Work/outlook-trigger/trigger.log</string>
+</dict>
+</plist>
