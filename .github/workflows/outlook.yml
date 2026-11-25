@@ -1,14 +1,16 @@
 name: 객관기후예측 갱신
 
-# EC46 은 매일 20:30 UTC, SEAS5 는 매월 5일 갱신 → 매일 22:10 UTC(07:10 KST) 산출
-# GitHub 예약 실행은 지연·누락될 수 있어 07:10 / 08:40 / 12:10 KST 세 번 걸어 두고,
-# 그날 07시 이후 발표가 이미 게시돼 있으면 뒤의 예약 실행은 건너뛴다(push·수동 실행은 항상 실행).
+# EC46 은 매일 20:30 UTC, SEAS5 는 매월 5일 갱신 → 매일 07:10 KST 산출
+# 주 트리거: 맥 미니 launchd 가 07:10 KST 에 workflow_dispatch 로 실행(ops/macmini/, 몇 초 안에 시작).
+# 아래 schedule 은 맥 미니가 꺼진 날을 위한 예비다. GitHub 예약 실행은 3~10시간씩 늦게 시작되는
+# 일이 잦아(2026-11 실측) 정시·10분 단위처럼 몰리는 시각을 피해 걸어 둔다.
+# 그날 07시 이후 발표가 이미 게시돼 있으면 예약 실행은 건너뛴다(push·수동 실행은 항상 실행).
 # 산출 결과를 포함한 웹사이트 전체를 gh-pages 브랜치에 올린다 (Settings → Pages → Deploy from a branch → gh-pages)
 on:
   schedule:
-    - cron: "10 22 * * *"
-    - cron: "40 23 * * *"
-    - cron: "10 3 * * *"
+    - cron: "23 22 * * *"   # 07:23 KST
+    - cron: "47 0 * * *"    # 09:47 KST
+    - cron: "37 4 * * *"    # 13:37 KST
   push:
     paths: ["pipeline/**", "site/**", ".github/workflows/outlook.yml"]
   workflow_dispatch:
@@ -58,9 +60,20 @@ jobs:
         run: python pipeline/outlook.py ${{ inputs.demo && '--demo' || '' }}
       - name: 지난 발표 보관(gh-pages 의 archive 이어받기 + 오늘 발표 추가, 45일 보관)
         run: |
-          git clone -q --depth 1 -b gh-pages "https://github.com/${{ github.repository }}.git" /tmp/prev || true
+          set -e
+          repo="https://github.com/${{ github.repository }}.git"
           mkdir -p site/data/archive
-          if [ -d /tmp/prev/data/archive ]; then cp -r /tmp/prev/data/archive/. site/data/archive/; fi
+          # gh-pages 가 있는데 복제에 실패하면 보관분이 오늘 발표 하나로 덮어써지므로 게시하지 않고 멈춘다
+          if git ls-remote --exit-code --heads "$repo" gh-pages >/dev/null; then
+            for i in 1 2 3; do
+              git clone -q --depth 1 -b gh-pages "$repo" /tmp/prev && break
+              rm -rf /tmp/prev; echo "gh-pages 복제 실패($i/3), 15초 뒤 재시도"; sleep 15
+            done
+            if [ ! -d /tmp/prev/.git ]; then echo "::error::이전 게시본을 받지 못해 게시를 중단합니다(보관분 보호)"; exit 1; fi
+            if [ -d /tmp/prev/data/archive ]; then cp -r /tmp/prev/data/archive/. site/data/archive/; fi
+          else
+            echo "gh-pages 브랜치 없음: 첫 게시로 보고 보관을 새로 시작"
+          fi
           python pipeline/archive.py
       - name: 웹사이트를 gh-pages 브랜치에 게시(단일 커밋, 이력 누적 없음)
         run: |

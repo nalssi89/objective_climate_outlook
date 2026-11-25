@@ -28,7 +28,7 @@
 5. **웹 게시**
    - Settings → Pages → Build and deployment → Source: **Deploy from a branch** → Branch: **gh-pages / (root)** → Save.
    - 주소: `https://<계정>.github.io/<저장소>/`
-6. 이후 매일 07:10 KST(예비 08:40·12:10)에 자동 갱신됩니다.
+6. GitHub 예약 실행만으로는 몇 시간씩 늦어질 수 있습니다. 정시 갱신이 필요하면 상시 켜 둔 PC에서 07:10 에 `gh workflow run outlook.yml` 을 실행하세요(맥: `zsh ops/macmini/install.sh`). 예비 예약은 07:23·09:47·13:37 KST 입니다.
 
 ## 2. 내 PC·서버에서 실행
 
