@@ -1,0 +1,38 @@
+.doc { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 28px; max-width: 1180px; margin: 0 auto; padding: 24px 20px 40px; }
+.toc { position: sticky; top: 80px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
+.toc a { text-decoration: none; color: var(--ink-2); padding: 5px 10px; border-radius: 7px; font-size: 13.5px; }
+.toc a:hover { background: var(--surface-2); }
+.doc article { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 8px 28px 28px; min-width: 0; }
+.doc section { padding-top: 22px; }
+.doc h2 { font-size: 19px; margin-bottom: 10px; letter-spacing: -0.01em; }
+.doc h3 { font-size: 15px; margin-bottom: 6px; }
+.doc p, .doc li { color: var(--ink-2); line-height: 1.7; }
+.doc b { color: var(--ink); }
+.doc code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
+.note { font-size: 13px; }
+ul.ticks { padding-left: 18px; }
+ol.steps { padding-left: 20px; }
+ol.steps li { margin-bottom: 10px; }
+.formula { margin: 8px 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; color: var(--ink); font-size: 13.5px; }
+.tablewrap { overflow-x: auto; }
+.doc-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.doc-table th, .doc-table td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.doc-table thead th { color: var(--ink); background: var(--surface-2); }
+.doc-table tbody th { color: var(--ink); white-space: nowrap; }
+.doc-table td { color: var(--ink-2); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+.diagram svg { width: 100%; height: auto; }
+.diagram .node rect { fill: var(--surface-2); stroke: var(--axis); }
+.diagram .node.strong rect { fill: color-mix(in srgb, var(--accent) 12%, var(--surface)); stroke: var(--accent); }
+.diagram text { fill: var(--ink); font-size: 13px; text-anchor: middle; font-weight: 600; }
+.diagram text.s { fill: var(--ink-2); font-size: 11.5px; font-weight: 400; }
+.diagram .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.diagram .arrowhead { fill: var(--muted); }
+pre.code { background: var(--surface-2); padding: 12px 14px; border-radius: 10px; overflow-x: auto; font-size: 12.5px; color: var(--ink); }
+@media (max-width: 860px) {
+  .doc { grid-template-columns: 1fr; padding: 16px; }
+  .toc { position: static; flex-direction: row; flex-wrap: wrap; }
+  .doc article { padding: 4px 16px 20px; }
+  .grid2 { grid-template-columns: 1fr; }
+}
